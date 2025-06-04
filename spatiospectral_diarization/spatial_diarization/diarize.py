@@ -1,6 +1,8 @@
 from einops import rearrange
 
 import numpy as np
+from sklearn.cluster import AgglomerativeClustering
+
 import paderbox as pb
 from nara_wpe.wpe import wpe_v8
 
@@ -15,7 +17,7 @@ from spatiospectral_diarization.spatial_diarization.utils import (
     frame_to_sample_activity,
     postprocess_activities,
     channel_wise_activities,
-    convert_to_frame_wise_activities
+    convert_to_frame_wise_activities, erode, dilate
 )
 
 def tdoa_diarization(
@@ -55,6 +57,7 @@ def tdoa_diarization(
     est_activities, tdoas = \
         postprocess_activities(est_activities, tdoas)
     return est_activities, np.asarray(tdoas)
+
 
 def spatial_diarization(distributed, seg_tdoas, segments, sigs, dilation_len_spatial,
                         dilation_len_spatial_add):
@@ -118,18 +121,6 @@ def spatial_diarization(distributed, seg_tdoas, segments, sigs, dilation_len_spa
         for act in est_activities
     ]
 
-    # est_activities = np.asarray(est_activities)
-    # if len(est_activities) < len(gt_activities):
-    #     est_activities = np.pad(
-    #         est_activities,
-    #         ((0, len(gt_activities) - len(est_activities)), (0, 0)),
-    #         'constant'
-    #     )
-    # best_permutation = solve_permutation(est_activities[:, :gt_activities.shape[-1]], gt_activities[:, :est_activities.shape[-1]])
-    #
-    # est_activities_om = np.asarray(
-    #     [est_activities[best_permutation[i]] for i in range(len(gt_activities))]
-    # )
     est_activities_spatial = np.asarray(est_activities)
     return est_activities_spatial, labels, num_spk
 

@@ -17,7 +17,7 @@ def get_sdrs(w_mat, target_psd_matrix, noise_psd_matrix, eps=None):
     ) / np.maximum(np.einsum(
         '...FdR,...FdD,...FDR->...R', w_mat.conj(), noise_psd_matrix, w_mat
     ), eps)
-    # Raises an exception when np.inf and/or np.NaN was in target_psd_matrix
+    # Raises an exception if np.inf and/or np.NaN was in target_psd_matrix
     # or noise_psd_matrix
     assert np.all(np.isfinite(sdrs)), sdrs
     return sdrs.real

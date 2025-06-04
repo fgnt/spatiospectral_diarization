@@ -5,10 +5,10 @@ from einops import rearrange
 import numpy as np
 from dlp_mpi.collection import NestedDict
 from paderbox.io.new_subdir import NameGenerator
-from spatiospectral_diarization.clustering import embeddings_hdbscan_clustering
+from spatiospectral_diarization.embedding_based_clustering import embeddings_hdbscan_clustering
 from spatiospectral_diarization.extraction.mask_estimation import get_dominant_time_frequency_mask, \
     extract_segment_stft_and_context, compute_smoothed_scms, compute_steering_and_similarity_masks, \
-    resolve_mask_ambiguities, predict_CACGMM_masks
+    resolve_mask_ambiguities, cacgmm_mask_refinement
 from spatiospectral_diarization.spatial_diarization.diarize import spatial_diarization
 from speaker_reassignment.tcl_pretrained import PretrainedModel
 import padertorch as pt
@@ -62,8 +62,6 @@ def config():
     setup = 'compact'  # (compact, distributed)
     channels = 'set1' # [set1, set2, set3, all]
     debug = False
-    noctua2 = False
-    noctua1 = False
     experiment_dir = None
     if experiment_dir is None:
         experiment_dir = pt.io.get_new_storage_dir(
@@ -224,9 +222,8 @@ def spatio_spectral_diarization(json_path, dsets, setup, channels, experiment_di
                 if phantom:
                     continue # skip segments of phantom speakers
 
-                # todo: something like if cac: do this (siehe tobi structure)
                 """Mask estimation with CACGMM"""
-                masks = predict_CACGMM_masks(masks, sigs_stft, seg_acitivities, dominant, fft_size, logger)
+                masks = cacgmm_mask_refinement(masks, sigs_stft, seg_acitivities, dominant, fft_size, logger)
 
                 masks, seg_acitivities, _, phantom = postprocess_and_get_activities(masks, tdoas_segment,
                                                                                     k_min, k_max, act_th, min_len,

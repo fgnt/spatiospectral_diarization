@@ -115,11 +115,17 @@ def setup_logger(log_dir=None, log_level=logging.INFO):
 
     return logger
 
-
-
-
-
 def solve_permutation(activities, ref_activities):
+    """
+    Solves the permutation problem for activities by finding the best matching assignment between estimated and
+    reference activities. Utilizes the Hungarian algorithm to maximize the overlap between activities.
+    Args:
+        activities:
+        ref_activities:
+
+    Returns:
+
+    """
     if len(ref_activities) < len(activities):
         ref_activities = np.pad(
             ref_activities,

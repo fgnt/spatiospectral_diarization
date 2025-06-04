@@ -66,7 +66,6 @@ def temporally_constrained_clustering(candidates, max_dist=5, max_temp_dist=16, 
                 else:
                     diary.append(([tdoas], [frame_id], [srp]))
     diary = sorted(diary, key=lambda x: x[1][0], reverse=True)
-    #diary = [entry for entry in diary if len(entry[1])>=4]
     return diary
 
 def single_linkage_clustering(temp_diary, max_dist=2):

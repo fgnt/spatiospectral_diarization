@@ -61,7 +61,7 @@ def get_position_candidates(
             )
             gcc = np.fft.ifftshift(np.fft.ifft(avg_gcpsd).real)
             search_area = \
-                gcc[fft_size//2-search_range:fft_size//2+search_range] # TODO: Tobi? +1 weil oben lags auch +1?
+                gcc[fft_size//2-search_range:fft_size//2+search_range]
 
 # ---------------------------------------------------------------------------------
             th = 2 * np.sqrt(np.mean(search_area[search_area > 0] ** 2))
@@ -79,29 +79,6 @@ def get_position_candidates(
                 peak_tdoas[p][ch, ref_ch] = -lags[peak]
                 gccs[p][ref_ch, ch] = gccs[p][ch, ref_ch] = search_area[peak]
 
-        '''srps = []
-        for combination in itertools.product(*[np.arange(len(p)) for p in peaks]):
-            tdoas = np.zeros((num_chs, num_chs))
-            for p, (r, s) in zip(combination, ch_pairs):
-                tdoas[r, s] = peak_tdoas[p][r, s]
-                tdoas[s, r] = peak_tdoas[p][s, r]
-            srp = 0
-            for p, (r, s) in zip(combination, ch_pairs):
-                srp += gccs[p][r, s]
-            valid = True
-            for (i, j) in ch_pairs:
-                for k in range(num_chs):
-                    if i == k or j == k:
-                        continue
-                    if abs(tdoas[i, j] - tdoas[i, k] + tdoas[j, k]) >= max_diff:
-                        valid = False
-                        break
-                if not valid:
-                    break
-            if valid:
-                tdoas = np.asarray([peak_tdoas[p][r, s]
-                                    for p, (r, s) in zip(combination, ch_pairs)])
-                srps.append((tdoas, srp))'''
         srps = []
         for combination in itertools.product(*[np.arange(len(p)) for p in peaks[:num_chs-1]]):
             taus = []

@@ -232,8 +232,8 @@ def resolve_mask_ambiguities(masks, tdoas_segment, sigs, k, fft_size, inst_scm, 
     return masks
 
 
-def predict_CACGMM_masks(masks, sigs_stft, seg_acitivities, dominant, fft_size, logger, weight_constant_axis=-3,
-                         max_val=0.8):
+def cacgmm_mask_refinement(masks, sigs_stft, seg_acitivities, dominant, fft_size, logger, weight_constant_axis=-3,
+                           max_val=0.8, num_iterations=10):
     """
     Predicts time-frequency masks using the Complex Angular Central Gaussian Mixture Model (CACGMM).
     This function initializes and fits a CACGMM to the input STFT signals, using provided segment activities and a dominance mask.
@@ -250,12 +250,7 @@ def predict_CACGMM_masks(masks, sigs_stft, seg_acitivities, dominant, fft_size, 
     """
     logger.info('CACGMM')
     trainer = CACGMMTrainer()
-    permutation_aligner = DHTVPermutationAlignment(
-        stft_size=fft_size,
-        segment_start=100, segment_width=100, segment_shift=20,
-        main_iterations=20, sub_iterations=2,
-        similarity_metric='cos',
-    )
+    permutation_aligner = DHTVPermutationAlignment.from_stft_size(fft_size)
     input_mm = rearrange(sigs_stft, 'd t f -> f t d')
     masks *= seg_acitivities[..., None].astype(bool)
     init_masks = np.concatenate((masks, 1 - dominant[None]))
@@ -268,9 +263,9 @@ def predict_CACGMM_masks(masks, sigs_stft, seg_acitivities, dominant, fft_size, 
         input_mm,
         initialization=init_masks,
         weight_constant_axis=weight_constant_axis,
-        iterations=10,
+        iterations=num_iterations,
         inline_permutation_aligner=permutation_aligner
     )
-    masks = cacgmm.predict(input_mm)
-    masks = rearrange(masks, 'f s t -> s t f')
-    return masks
+    refined_masks = cacgmm.predict(input_mm)
+    refined_masks = rearrange(refined_masks, 'f s t -> s t f')
+    return refined_masks

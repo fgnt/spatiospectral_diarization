@@ -24,23 +24,6 @@ def channel_wise_activities(sigs, frame_size=1024, frame_shift=256):
         activities[ch_id] = act[:len(sig)]
     return activities
 
-# TODO old act function, but above one was used in final script
-# def channel_wise_activities(sigs, frame_size=1024, frame_shift=256):
-#     activities = np.zeros_like(sigs, bool)
-#     for ch_id, sig in enumerate(sigs):
-#         energy = np.sum(
-#             pb.array.segment_axis(
-#                 sig[sig > 0], frame_size, frame_shift, end='cut'
-#             ) ** 2,
-#             axis=-1
-#         )
-#         th = np.min(energy[energy > 0])
-#         vad = VoiceActivityDetector(1.5 * th, len_smooth_win=0)
-#         act = vad(sig)
-#         activities[ch_id] = act[:len(sig)]
-#     return activities
-
-
 def convert_to_frame_wise_activities(
         activities, th=.5, frame_size=1024, frame_shift=256
 ):
