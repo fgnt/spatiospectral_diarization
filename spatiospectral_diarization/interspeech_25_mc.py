@@ -47,10 +47,7 @@ from pb_bss.extraction.beamformer_wrapper import get_gev_rank_one_estimate
 from .utils import Kernel1D
 from nara_wpe.wpe import wpe_v8
 
-from spatiospectral_diarization.spatial_diarization.extraction.utils import (
-    get_sdrs,
-    get_interference_segments
-)
+from spatiospectral_diarization.extraction.utils import get_sdrs, get_interference_segments
 import matplotlib.pyplot as plt
 
 ex = Experiment('libriwasn_pipeline_v3')

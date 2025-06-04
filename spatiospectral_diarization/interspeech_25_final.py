@@ -11,12 +11,13 @@ from spatiospectral_diarization.spatial_diarization.utils import (
     channel_wise_activities,
     convert_to_frame_wise_activities
 )
+
 from copy import deepcopy
 from pathlib import Path
 from lazy_dataset.database import JsonDatabase
 from paderwasn.synchronization.sro_estimation import DynamicWACD
 from paderwasn.synchronization.utils import VoiceActivityDetector
-from .sro_compensation.sync import compensate_for_sros
+from spatiospectral_diarization.sro_compensation.sync import compensate_for_sros
 from sklearn.cluster import HDBSCAN, AgglomerativeClustering
 from spatiospectral_diarization.spatial_diarization.utils import erode, dilate
 import scipy
@@ -44,25 +45,28 @@ from pb_bss.extraction.beamformer import get_power_spectral_density_matrix
 from pb_bss.extraction.beamformer import get_mvdr_vector_souden
 from pb_bss.extraction.beamformer import blind_analytic_normalization
 from pb_bss.extraction.beamformer_wrapper import get_gev_rank_one_estimate
-from .utils import Kernel1D
+from spatiospectral_diarization.utils import Kernel1D, setup_logger
 from nara_wpe.wpe import wpe_v8
-
-from spatiospectral_diarization.spatial_diarization.extraction.utils import (
+import logging
+from spatiospectral_diarization.extraction.utils import (
     get_sdrs,
     get_interference_segments
 )
 import matplotlib.pyplot as plt
 
 ex = Experiment('libriwasn_pipeline_v3')
-
+'''
+Run init and then make file or mpiexec:
+python spatiospectral_diarization/interspeech_25_final.py init
+'''
 MAKEFILE = """
 SHELL := /bin/bash
 
 evaluate:
-\tmpiexec --use-hwthread-cpus -np 8 python -m tcl.eval.spatio_spectral.interspeech_25_final with config.json
+\tmpiexec --use-hwthread-cpus -np 8 python -m spatiospectral_diarization.interspeech_25_final with config.json
 
 debug:
-\tpython -m tcl.eval.spatio_spectral.interspeech_25_final with config.json --pdb
+\tpython -m spatiospectral_diarization.interspeech_25_final with config.json --pdb
 
 """
 
@@ -76,8 +80,6 @@ BATCHFILE_TEMPLATE_EVAL = """#!/bin/bash
 #SBATCH -n 61
 #SBATCH --output {nickname}_eval_%j.out
 #SBATCH --error {nickname}_eval_%j.err
-#SBATCH --mail-type ALL
-#SBATCH --mail-user cord@nt.upb.de
 
 srun python -m {main_python_path} with config.json
 
@@ -85,14 +87,14 @@ srun python -m {main_python_path} with config.json
 
 @ex.config
 def config():
-    json_path = '/net/vol/tgburrek/db/libriwasn_netdb.json'
-    dsets = ['libricss','libriwasn200', 'libriwasn800'] # [libricss, libriwasn200, libriwasn800]
+    json_path =  '/net/vol/tgburrek/db/libriwasn_netdb.json'  #  "/net/vol/jenkins/jsons/notsofar.json" #
+    dsets =['libriwasn200'] # [libricss, libriwasn200, libriwasn800] # ["train_set_240130.1_train"] #
 
     setup = 'compact'  # (compact, distributed)
     channels = 'set1' # [set1, set2, set3, all]
-    debug = False
+    debug = False  # True testen und so und dann mit 0.5 und 0.25 ausführen
     tmp_class_th_compact = 0.75
-    noctua2 = False
+    noctua2 = True
     noctua1 = False
     full_algorithm = True
     experiment_dir = None
@@ -109,14 +111,35 @@ def distributed():
     dsets = ['libriwasn200', 'libriwasn800']
 
 @ex.named_config
+def libri():
+    json_path = '/net/vol/tgburrek/db/libriwasn_netdb.json'
+    dsets = ['libricss', 'libriwasn200','libriwasn800']
+    setup = 'compact'  # (compact, distributed)
+    channels = 'set1'  # [set1, set2, set3, all]
+    debug = False
+    tmp_class_th_compact = 0.75
+    noctua2 = False
+    noctua1 = False
+    full_algorithm = True
+    experiment_dir = None
+    if experiment_dir is None:
+        experiment_dir = pt.io.get_new_storage_dir(
+            'libriwasn_spatiospectral',
+            id_naming=NameGenerator(('adjectives', 'colors', 'animals')),
+        )
+
+@ex.named_config
 def noctua():
     noctua2=True
     json_path='/scratch/hpc-prf-nt1/cord/jsons/libriwasn_netdb.json'
+    # json_path='/scratch/hpc-prf-nt2/deegen/deploy/forschung/DiariZen/notsofar.json'
 
 @ex.named_config
 def noctua1():
     noctua1=True
     json_path='/scratch-n2/hpc-prf-nt1/cord/jsons/libriwasn_netdb.json'
+
+
 
 @ex.command(unobserved=True)
 def init(_run, _config):
@@ -147,6 +170,13 @@ def init(_run, _config):
     print(f'cd {experiment_dir}')
     print(f'make evaluate')
 
+
+def load_notsofar_ref(example, rttm_path):
+    activities = {}
+    for spk in example['activity'].keys():
+        activities[spk] = pb.array.interval.core.ArrayInterval.from_serializable(example['activity'][spk])
+    pb.array.interval.rttm.to_rttm(pb.array.interval.rttm.to_rttm_str({example["example_id"]: activities}), rttm_path)
+    return pb.array.interval.from_rttm(rttm_path)
 
 def estimate_sros(sigs):
     sro_estimator = DynamicWACD()
@@ -186,7 +216,7 @@ def channel_wise_activities(sigs, frame_size=1024, frame_shift=256):
             axis=-1
         )
         th = np.min(energy[energy > 0])
-        vad = VoiceActivityDetector(7 * th, len_smooth_win=0)
+        vad = VoiceActivityDetector(7 * th, len_smooth_win=0) # oder 0?
         act = vad(sig)
         act = np.array(dilate(pb.array.interval.ArrayInterval(act), 3201))
         act = np.array(erode(pb.array.interval.ArrayInterval(act), 3201))
@@ -375,7 +405,7 @@ def get_position_candidates(
             fft_seg = sigs_stft[ch, l]
             fft_ref_seg = sigs_stft[ref_ch, l]
             gcpsd = get_gcpsd(fft_seg, fft_ref_seg)
-            gcpsd_buffer[k, -1] = gcpsd #* dominant[l]
+            gcpsd_buffer[k, -1] = gcpsd * dominant[l] # Multiply dominantn to filter out noise frequencies
             avg_gcpsd = np.mean(gcpsd_buffer[k], 0)
             avg_gcpsd[avg_gcpsd > 0.5 / avg_len] /= np.abs(avg_gcpsd[avg_gcpsd > 0.5 / avg_len])
             if k_min is not None:
@@ -621,7 +651,6 @@ def spatio_spectral_pipeline(json_path, dsets,setup,full_algorithm, tmp_class_th
         distributed = True
     else:
         distributed = False
-
     #TODO: params
     frame_size_gcc = 4096
     frame_shift_gcc = 1024
@@ -664,8 +693,10 @@ def spatio_spectral_pipeline(json_path, dsets,setup,full_algorithm, tmp_class_th
     max_offset = 0
     context = 48000
 
+    logger = setup_logger(log_dir=experiment_dir, log_level=logging.DEBUG)
+    logger.info("Starting Spatio-Spectral Pipeline")
     db = JsonDatabase(json_path)
-    embed_extractor = PretrainedModel(
+    embed_extractor = PretrainedModel( # todo: consider mpi true setzen?
     )
     for dset in dsets:
         subset = dset
@@ -681,6 +712,7 @@ def spatio_spectral_pipeline(json_path, dsets,setup,full_algorithm, tmp_class_th
         diarization_targets = NestedDict()
         dataset = db.get_dataset(dset)
         if noctua2:
+            # TODO fix paths
             pc = PrefixCorrector(old_prefix='/net/db/', new_prefix='/scratch/hpc-prf-nt1/cord/data/')
             dataset = dataset.map(pc)
         if noctua1:
@@ -690,14 +722,24 @@ def spatio_spectral_pipeline(json_path, dsets,setup,full_algorithm, tmp_class_th
         channels = np.array([1, 3, 4, 6])
 
         if debug:
-            dataset = list(dataset[-4:]) + list(dataset[10:12])
+            dataset = list(dataset[10:12]) # + list(dataset[10:12])
+
+        logger.info(f"len: {len(dataset)}")
         for session in dlp_mpi.split_managed(dataset, allow_single_worker=True):
             session_name = session['example_id']
             if setup == 'compact':
                 if session['dataset'] == 'libricss':
                     sigs = pb.io.load_audio(session['audio_path']['observation'])[channels]
-                else:
+                elif 'libriwasn' in subset:
                     sigs = pb.io.load_audio(session['audio_path']['observation']['asnupb7'])
+                elif 'train_set_240130.1_train' in subset:
+                    print("loadsignal")
+                    sigs = []
+                    for i in channels:
+                        sigs.append(pb.io.load_audio(session['audio_path']['observation']['mc']['plaza_0'][i]))
+                    sigs = np.array(sigs)
+                else:
+                    raise KeyError(f'Undefined Dataset {subset}')
             elif setup == 'distributed':
                 sig0 = pb.io.load_audio(session['audio_path']['observation']['Pixel6a'])
                 sig1 = pb.io.load_audio(session['audio_path']['observation']['Pixel6b'])
@@ -760,6 +802,14 @@ def spatio_spectral_pipeline(json_path, dsets,setup,full_algorithm, tmp_class_th
                     gt_activities_.append(act)
                 gt_activities = [np.asarray(act) for act in gt_activities_]
                 gt_activities = np.asarray(gt_activities)
+            elif subset == 'train_set_240130.1_train':
+                gt_activities = load_notsofar_ref(example, )
+                gt_activities_ = []
+                for act in gt_activities.values():
+                    act.shape = sigs.shape[-1]
+                    gt_activities_.append(act)
+                gt_activities = [np.asarray(act) for act in gt_activities_]
+                gt_activities = np.asarray(gt_activities)
             gt_activities_ai = {spk: pb.array.interval.ArrayInterval(act.astype(bool)) for spk, act in enumerate(gt_activities)}
             diarization_targets[session_name] = gt_activities_ai
             ###################################################################
@@ -768,9 +818,11 @@ def spatio_spectral_pipeline(json_path, dsets,setup,full_algorithm, tmp_class_th
                 voice_activity, frame_size=frame_size_gcc, frame_shift=frame_shift_gcc
             )
 
+            logger.info(f"{session_name}")
             sigs_stft = pb.transform.stft(
                 sigs, frame_size_gcc, frame_shift_gcc, pad=False, fading=False
             )
+            # TODO: sollte das nicht 1 sein und nicht 0 als initial wert????? full alg rausschmeißen
             dominant = np.zeros_like(sigs_stft[0], bool)
             if full_algorithm:
                 eig_val_mem = np.zeros_like(sigs_stft[0])
@@ -1219,7 +1271,7 @@ def spatio_spectral_pipeline(json_path, dsets,setup,full_algorithm, tmp_class_th
                 phantom = False
                 for s, mask in enumerate(masks):
                     if verbose:
-                        print(s, np.round(tdoas_segment[s], 2))
+                        logger.info(f"{s}, {np.round(tdoas_segment[s], 2)}")
                         plt.imshow(mask.T, interpolation='nearest', aspect='auto', origin='lower')
                         plt.show()
                     act = np.mean(mask[:, k_min:k_max], -1)  > act_th2

@@ -5,16 +5,13 @@ def pseudo_hamming_distance(tdoas, ref_tdoas, margin=5):
     dist = np.sum(np.abs(tdoas - ref_tdoas) > margin)
     return dist
 
-
-def temporally_constrained_clustering(
-        candidates, max_dist=5, max_temp_dist=16, peak_ratio_th=.75
-):
+def temporally_constrained_clustering(candidates, max_dist=5, max_temp_dist=16, peak_ratio_th=.75):
     max_peaks = []
     for c in candidates:
         if len(c):
             if len(c[-1]) == 1:
                 max_peaks.append(c[-1][0][-1])
-    srp_th = np.mean(max_peaks) - 2 * np.std(max_peaks)
+    srp_th = 0#np.mean(max_peaks) - 2 * np.std(max_peaks)
     diary = []
     for (frame_id, spk_pos) in candidates:
         if not len(spk_pos):
@@ -30,10 +27,8 @@ def temporally_constrained_clustering(
             for c, entry in enumerate(diary):
                 ref_tdoas = entry[0][-1]
                 if frame_id - entry[1][-1] > max_temp_dist:
-                    #diary.append(([tdoas], [frame_id], [srp]))
-                    #break
                     continue
-                if np.max(abs(ref_tdoas - tdoas)) <= max_dist:
+                if np.linalg.norm(ref_tdoas - tdoas) <= max_dist and np.max(np.abs(ref_tdoas - tdoas)) <= .5:
                     entry[0].append(tdoas)
                     entry[1].append(frame_id)
                     entry[2].append(srp)
@@ -55,49 +50,30 @@ def temporally_constrained_clustering(
             else:
                 for c, entry in enumerate(diary):
                     if frame_id - entry[1][-1] > max_temp_dist:
-                        #diary.append(([tdoas], [frame_id], [srp]))
-                        #break
                         continue
-                    ref_tdoas = entry[0][-1]
-
-
-                    #if np.sum(np.abs(tdoas - ref_tdoas) > max_dist) <= 1:
-                    if np.max(abs(ref_tdoas - tdoas)) <= max_dist:
-                        entry[0].append(tdoas)
-                        entry[1].append(frame_id)
-                        entry[2].append(srp)
+                    match = False
+                    for x in range(len(entry[0])):
+                        if frame_id - entry[1][x] > max_temp_dist:
+                            continue
+                        if np.linalg.norm(entry[0][x] - tdoas) <= max_dist and np.max(np.abs(entry[0][x] - tdoas)) <= .5:
+                            entry[0].append(tdoas)
+                            entry[1].append(frame_id)
+                            entry[2].append(srp)
+                            match = True
+                            break
+                    if match:
                         break
                 else:
                     diary.append(([tdoas], [frame_id], [srp]))
-    diary = sorted(diary, key=lambda x: x[1][-1], reverse=True)
+    diary = sorted(diary, key=lambda x: x[1][0], reverse=True)
     #diary = [entry for entry in diary if len(entry[1])>=4]
     return diary
-
 
 def single_linkage_clustering(temp_diary, max_dist=2):
     M = np.zeros((len(temp_diary), len(temp_diary)))
 
     for i in range(len(temp_diary)):
         for j in range(i + 1, len(temp_diary)):
-            '''M[i, j] = M[j, i] = np.max(
-                np.abs(
-                    np.median(temp_diary[i][0], 0)
-                    - np.median(temp_diary[j][0], 0)
-                )
-            )'''
-            '''if temp_diary[i][1][-1] < temp_diary[j][1][0] \
-                    and temp_diary[j][1][-1] >= temp_diary[i][1][0]:
-                M[i, j] = M[j, i] = np.max(
-                    np.abs(temp_diary[i][0][-1] - temp_diary[j][0][0])
-                )
-
-            elif temp_diary[i][1][-1] >= temp_diary[j][1][0] and \
-                    temp_diary[j][1][-1] < temp_diary[i][1][0]:
-                M[i, j] = M[j, i] = np.max(
-                    np.abs(temp_diary[j][0][-1] - temp_diary[i][0][0])
-                )
-            else:
-                M[i, j] = M[j, i] = 100'''
             M[i, j] = M[j, i] = np.max(
                 np.mean(
                     (np.median(temp_diary[i][0], 0)

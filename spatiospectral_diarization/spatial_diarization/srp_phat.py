@@ -3,7 +3,7 @@ import itertools
 import numpy as np
 from scipy.signal import find_peaks
 
-from spatial_diarization.diarization.utils import get_ch_pairs
+from spatiospectral_diarization.spatial_diarization.utils import get_ch_pairs
 
 
 def get_gcpsd(fft_seg, fft_ref_seg):
@@ -61,8 +61,9 @@ def get_position_candidates(
             )
             gcc = np.fft.ifftshift(np.fft.ifft(avg_gcpsd).real)
             search_area = \
-                gcc[fft_size//2-search_range:fft_size//2+search_range]
+                gcc[fft_size//2-search_range:fft_size//2+search_range] # TODO: Tobi? +1 weil oben lags auch +1?
 
+# ---------------------------------------------------------------------------------
             th = 2 * np.sqrt(np.mean(search_area[search_area > 0] ** 2))
             peaks_pair, _ = find_peaks(search_area)
             peaks_pair = np.asarray(peaks_pair)

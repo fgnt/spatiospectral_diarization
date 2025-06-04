@@ -139,13 +139,13 @@ setup(
     install_requires=[
         'numpy',
         'scikit_learn',
-        'fire',
         'einops',
-        'pb_bss',
         'dlp_mpi',
         'paderbox',
         'padertorch',
         'meeteval',
+        'nara_wpe',
+        # pb_bss, libriwasn, paderwasn
     ],  # Optional
 
     # List additional groups of dependencies here (e.g. development

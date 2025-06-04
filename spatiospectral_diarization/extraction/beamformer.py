@@ -1,22 +1,40 @@
-from einops import rearrange
-
 import numpy as np
 import paderbox as pb
+from einops import rearrange
 from pb_bss.math.solve import stable_solve
 from pb_bss.extraction.beamformer import get_power_spectral_density_matrix
 from pb_bss.extraction.beamformer import get_mvdr_vector_souden
+from pb_bss.extraction.beamformer import blind_analytic_normalization
+from pb_bss.extraction.beamformer_wrapper import get_gev_rank_one_estimate
 from nara_wpe.wpe import wpe_v8
-
-from spatial_diarization.separation.utils import (
+from spatiospectral_diarization.extraction.utils import (
     get_sdrs,
     get_interference_segments
 )
 
 
-def time_varying_mvdr(
-        sigs_stft, masks, activities, wpe=True,
-        frame_size=1024, min_len=32, eps=1e-18
-):
+def time_varying_mvdr(sigs_stft, masks, activities, wpe=True, frame_size=1024, min_len=32, eps=1e-18):
+    """
+      Applies a time-varying MVDR (Minimum Variance Distortionless Response) beamformer to enhance a target source in a
+      multi-channel STFT signal.
+
+      This function processes the input signal in segments defined by activity intervals, optionally applies WPE
+       dereverberation, estimates spatial covariance matrices for target and interference, and computes MVDR
+       beamforming vectors for each segment. The enhanced signal segments and their onset positions are returned.
+
+      Args:
+          sigs_stft (np.ndarray): Multi-channel STFT signal array of shape (channels, frames, frequency bins).
+          masks (np.ndarray): Mask array indicating target activity, shape (sources, frames, frequency bins).
+          activities (np.ndarray): Activity matrix for all sources, shape (sources, frames).
+          wpe (bool, optional): If True, applies WPE dereverberation. Default is True.
+          frame_size (int, optional): Frame size for ISTFT. Default is 1024.
+          min_len (int, optional): Minimum segment length to process. Default is 32.
+          eps (float, optional): Small value to avoid division by zero. Default is 1e-18.
+
+      Returns:
+          sig_segments: List of enhanced signal segments (time-domain).
+          segment_onsets: List of onset sample indices for each segment.
+      """
     target_act = activities[0]
     activity_intervals = \
             pb.array.interval.ArrayInterval(target_act).normalized_intervals
@@ -38,6 +56,14 @@ def time_varying_mvdr(
             normalize=False
         )
         scm_target /= off - on
+        interference_scm = get_power_spectral_density_matrix(
+            rearrange(sigs_stft_beam, 'c t f -> f c t') * (1 - masks[0, :, None,  on:off]),
+            normalize=False
+        )
+        interference_scm += \
+            1e-9 * np.eye(len(sigs_stft))[None]
+        scm_target_ = \
+            get_gev_rank_one_estimate(scm_target, interference_scm)
         segment_info = get_interference_segments(activities[:, on:off], 0, off-on, 8)
         interference_segments = []
         for s, (on_, of_, concurrent) in enumerate(segment_info):
@@ -69,12 +95,14 @@ def time_varying_mvdr(
             bf_vec = get_mvdr_vector_souden(
                 scm_target, interference_scm, ref_channel=ref_ch
             )
+            bf_vec = \
+                blind_analytic_normalization(bf_vec, interference_scm)
             for l in range(on_, of_):
                 bf_output[l] = \
                     np.einsum('fc, cf-> f', np.conj(bf_vec), sigs_stft_beam[:, l])
         enh_sig = pb.transform.istft(
             bf_output, size=frame_size, shift=frame_size//4,
-            window_length=frame_size, fading=False
+            window_length=frame_size, fading=False, pad=False
         )
         sig_segments.append(enh_sig)
         onset = \

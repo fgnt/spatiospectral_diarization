@@ -57,3 +57,4 @@ def get_interference_segments(activities, onset, offset, min_len=16):
         ]
         segment_info.append((borders[i-1], borders[i], concurrent))
     return segment_info
+

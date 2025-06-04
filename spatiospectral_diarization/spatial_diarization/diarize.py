@@ -4,20 +4,19 @@ import numpy as np
 import paderbox as pb
 from nara_wpe.wpe import wpe_v8
 
-from spatial_diarization.diarization.srp_phat import get_position_candidates
-from spatial_diarization.diarization.cluster import temporally_constrained_clustering
-from spatial_diarization.diarization.utils import (
+from spatiospectral_diarization.spatial_diarization.srp_phat import get_position_candidates
+from spatiospectral_diarization.spatial_diarization.cluster import (
+    temporally_constrained_clustering,
+    single_linkage_clustering
+)
+from spatiospectral_diarization.spatial_diarization.utils import (
     clusters_to_diary,
     diary_to_activities,
     frame_to_sample_activity,
-    postprocess_activities
-)
-from spatial_diarization.diarization.utils import (
+    postprocess_activities,
     channel_wise_activities,
     convert_to_frame_wise_activities
 )
-from spatial_diarization.diarization.cluster import single_linkage_clustering
-
 
 def tdoa_diarization(
         sigs, max_dist_merge=2, max_temp_dist_cl=32, min_srp_peak_rato=.75,
@@ -56,3 +55,81 @@ def tdoa_diarization(
     est_activities, tdoas = \
         postprocess_activities(est_activities, tdoas)
     return est_activities, np.asarray(tdoas)
+
+def spatial_diarization(distributed, seg_tdoas, segments, sigs, dilation_len_spatial,
+                        dilation_len_spatial_add):
+    """
+    Performs spatial diarization by clustering segments based on their TDOA (Time Difference of Arrival) values.
+
+    Args:
+        distributed (bool): If True, uses parameters suitable for distributed microphone setups.
+        seg_tdoas (list or np.ndarray): List of TDOA values for each segment.
+        segments (list): List of activity intervals for each segment.
+        sigs (np.ndarray): Multichannel audio signals.
+        gt_activities (list or np.ndarray): Ground truth speaker activities.
+        dilation_len_spatial (int): Dilation length for post-processing the estimated activities.
+        dilation_len_spatial_add (int): Additional dilation length for further post-processing.
+
+    Returns:
+        est_activities_spatial (np.ndarray): Estimated speaker activities after spatial clustering and post-processing.
+        labels (np.ndarray): Cluster labels assigned to each segment.
+        num_spk (int): Estimated number of speakers.
+    """
+    if distributed:
+        labels = AgglomerativeClustering(n_clusters=None, distance_threshold=5, linkage='single').fit_predict(seg_tdoas)
+        min_samples = 3
+        for i in range(np.max(labels) + 1):
+            if np.sum(labels == i) < min_samples:
+                labels[labels == i] = -1
+    else:
+        labels = AgglomerativeClustering(n_clusters=None, distance_threshold=.25, linkage='single').fit_predict(
+            seg_tdoas)
+        min_samples = 3
+        for i in range(np.max(labels) + 1):
+            if np.sum(labels == i) < min_samples:
+                labels[labels == i] = -1
+    labels = np.asarray(labels)
+    mapping = {label: i for i, label in enumerate(set(labels[labels != -1]))}
+    mapping[-1] = -1
+    labels = [mapping[label] for label in labels]
+    labels = np.asarray(labels)
+    num_spk = np.max(labels) + 1
+    est_activities = np.zeros((num_spk, sigs.shape[-1]), bool)
+
+    for label, act in zip(labels, segments):
+        if label == -1:
+            continue
+        onset, offset = act.intervals[0]
+        est_activities[label, onset:offset] = 1
+
+    est_activities = [
+        np.array(dilate(pb.array.interval.ArrayInterval(act), dilation_len_spatial))
+        # Kernel1D(dilation_len_spatial, kernel=np.max)(act)
+        for act in est_activities
+    ]
+    est_activities = [
+        np.array(erode(pb.array.interval.ArrayInterval(act), dilation_len_spatial))
+        # Kernel1D(erosion_len_spatial, kernel=np.min)(act)
+        for act in est_activities
+    ]
+    est_activities = [
+        np.array(dilate(pb.array.interval.ArrayInterval(act), dilation_len_spatial_add))
+        # Kernel1D(dilation_len_spatial, kernel=np.max)(act)
+        for act in est_activities
+    ]
+
+    # est_activities = np.asarray(est_activities)
+    # if len(est_activities) < len(gt_activities):
+    #     est_activities = np.pad(
+    #         est_activities,
+    #         ((0, len(gt_activities) - len(est_activities)), (0, 0)),
+    #         'constant'
+    #     )
+    # best_permutation = solve_permutation(est_activities[:, :gt_activities.shape[-1]], gt_activities[:, :est_activities.shape[-1]])
+    #
+    # est_activities_om = np.asarray(
+    #     [est_activities[best_permutation[i]] for i in range(len(gt_activities))]
+    # )
+    est_activities_spatial = np.asarray(est_activities)
+    return est_activities_spatial, labels, num_spk
+
