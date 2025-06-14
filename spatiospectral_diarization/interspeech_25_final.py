@@ -87,8 +87,8 @@ srun python -m {main_python_path} with config.json
 
 @ex.config
 def config():
-    json_path =  '/net/vol/tgburrek/db/libriwasn_netdb.json'  #  "/net/vol/jenkins/jsons/notsofar.json" #
-    dsets =['libriwasn200'] # [libricss, libriwasn200, libriwasn800] # ["train_set_240130.1_train"] #
+    json_path = "/scratch/hpc-prf-nt2/tvn/data/notsofar1/notsofar.json"   #  '/net/vol/tgburrek/db/libriwasn_netdb.json'  #  "/net/vol/jenkins/jsons/notsofar.json" #
+    dsets = ['eval_set_240825.1_eval_full_with_GT']  # ['libriwasn200'] # [libricss, libriwasn200, libriwasn800] # ["train_set_240130.1_train"] #
 
     setup = 'compact'  # (compact, distributed)
     channels = 'set1' # [set1, set2, set3, all]
@@ -172,10 +172,14 @@ def init(_run, _config):
 
 
 def load_notsofar_ref(example, rttm_path):
+    #todo: append statt overwrite machen
+    # oder jeder einzelne datei wie vorher machen ? siehe wasn
     activities = {}
     for spk in example['activity'].keys():
         activities[spk] = pb.array.interval.core.ArrayInterval.from_serializable(example['activity'][spk])
-    pb.array.interval.rttm.to_rttm(pb.array.interval.rttm.to_rttm_str({example["example_id"]: activities}), rttm_path)
+    # pb.array.interval.rttm.to_rttm({example["example_id"]: activities}, rttm_path)
+    with open(rttm_path, "a") as f:
+        pb.array.interval.rttm.to_rttm({example["example_id"]: activities}, f)
     return pb.array.interval.from_rttm(rttm_path)
 
 def estimate_sros(sigs):
@@ -651,6 +655,10 @@ def spatio_spectral_pipeline(json_path, dsets,setup,full_algorithm, tmp_class_th
         distributed = True
     else:
         distributed = False
+
+    device = "rockfall_2"   #  "plaza_0"
+    # rttm_path = Path(experiment_dir) / f'diarization_targets_notsofar.rttm'
+
     #TODO: params
     frame_size_gcc = 4096
     frame_shift_gcc = 1024
@@ -732,11 +740,10 @@ def spatio_spectral_pipeline(json_path, dsets,setup,full_algorithm, tmp_class_th
                     sigs = pb.io.load_audio(session['audio_path']['observation'])[channels]
                 elif 'libriwasn' in subset:
                     sigs = pb.io.load_audio(session['audio_path']['observation']['asnupb7'])
-                elif 'train_set_240130.1_train' in subset:
-                    print("loadsignal")
+                elif 'train_set_240825.1_train' in subset or 'eval_set_240825.1_eval_full_with_GT' in subset:
                     sigs = []
                     for i in channels:
-                        sigs.append(pb.io.load_audio(session['audio_path']['observation']['mc']['plaza_0'][i]))
+                        sigs.append(pb.io.load_audio(session['audio_path']['observation']['mc'][device][i]))
                     sigs = np.array(sigs)
                 else:
                     raise KeyError(f'Undefined Dataset {subset}')
@@ -802,10 +809,10 @@ def spatio_spectral_pipeline(json_path, dsets,setup,full_algorithm, tmp_class_th
                     gt_activities_.append(act)
                 gt_activities = [np.asarray(act) for act in gt_activities_]
                 gt_activities = np.asarray(gt_activities)
-            elif subset == 'train_set_240130.1_train':
-                gt_activities = load_notsofar_ref(example, )
+            elif subset == 'train_set_240825.1_train' or subset == 'eval_set_240825.1_eval_full_with_GT':
+                gt_activities = pb.array.interval.from_rttm(f"/scratch/hpc-prf-nt2/deegen/data/notsofar/notsofar_{subset}.rttm")
                 gt_activities_ = []
-                for act in gt_activities.values():
+                for act in gt_activities[example["example_id"]].values():
                     act.shape = sigs.shape[-1]
                     gt_activities_.append(act)
                 gt_activities = [np.asarray(act) for act in gt_activities_]
@@ -822,7 +829,6 @@ def spatio_spectral_pipeline(json_path, dsets,setup,full_algorithm, tmp_class_th
             sigs_stft = pb.transform.stft(
                 sigs, frame_size_gcc, frame_shift_gcc, pad=False, fading=False
             )
-            # TODO: sollte das nicht 1 sein und nicht 0 als initial wert????? full alg rausschmeißen
             dominant = np.zeros_like(sigs_stft[0], bool)
             if full_algorithm:
                 eig_val_mem = np.zeros_like(sigs_stft[0])

@@ -13,7 +13,7 @@ import paderbox as pb
 from lazy_dataset.database import  JsonDatabase
 from dlp_mpi.collection import NestedDict
 
-from spatiospectral_diarization import SpatioSpectralDiarization
+from spatiospectral_diarization.spatio_spectral_pipeline import SpatioSpectralDiarization
 
 experiment_name = 'spatiospectral_diarization_libriwasn'
 ex = Experiment(experiment_name)
