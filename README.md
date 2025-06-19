@@ -88,7 +88,6 @@ To cite the spatio-spectral diarization pipeline, please cite the following publ
 @InProceedings{cordgburrek2025spatiospectral_diarization,
   Title                    = {Spatio-spectral diarization of meetings by combining {TDOA}-based segmentation and speaker embedding-based clustering},
   Author                   = {Cord-Landwehr, Tobias and Gburrek, Tobias and Deegen, Marc and Haeb-Umbach, Reinhold},
-  Booktitle                = {Proc. of Interspeech 2025},
   Year                     = {2025},
   Month                    = {Aug}
 }
