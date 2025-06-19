@@ -10,6 +10,7 @@ from sacred.observers import FileStorageObserver
 import dlp_mpi
 import padertorch as pt
 import paderbox as pb
+from eval.spatio_spectral.utils import synchronize
 from lazy_dataset.database import  JsonDatabase
 from dlp_mpi.collection import NestedDict
 
@@ -91,8 +92,10 @@ def init(_run, _config):
     print(f'make evaluate')
 
 
+
+
 @ex.main
-def main(_config, _run):
+def main(_config, _run, db_json, datasets, setup, semistatic):
     """
     Main function to run the spatiospectral diarization pipeline on LibriWASN or LibriCSS datasets.
     """
@@ -100,20 +103,47 @@ def main(_config, _run):
 
     # Load the database
     #TODO db =
-    db = JsonDatabase(_config['db_json'])
+    db = JsonDatabase(db_json)
 
+
+    # Initalize the Diarization pipeline
+    pipeline = SpatioSpectralDiarization(return_intervals=True)
+
+
+    # Iterate over the datasets
     for dataset_name in _config['datasets']:
         dataset = db.get_dataset(dataset_name)
 
-        if dataset is None:
+        if semistatic:
+            prepare_dataset = dataset_preparation_semistatic(dataset_name, setup)
+        else:
+            prepare_dataset = dataset_preparation(dataset_name, setup)
+        # Prepare current dataset
+        dataset = dataset.map(prepare_dataset)
+        diarization_estimates = NestedDict()
 
-        db = db.filter(lambda x: x['setup'] == _config['setup'])
-        db = db.filter(lambda x: x['semistatic'] == _config.get('semistatic', False))
+        # Process the individual meetings
+        for meeting in dlp_mpi.split_managed(dataset, allow_single_worker=True):
+            # Get the audio data
+            session_id = meeting['session_id']
+            audio_data = meeting['audio_data']
 
-        # Initialize the diarization pipeline
+            # Run the diarization pipeline
+            dia_output = pipeline(
+                audio_data=audio_data,
+                session_id=meeting['session_id'],
+                dataset=dataset_name,
+                debug=_config['debug']
+            )
 
-    spatiospectral_pipeline = SpatioSpectralDiarization()
+            # Convert diarization result back to sample resolution
+            diarization_estimates[session_id] = dia_output['diarization_estimate']
+        # Aggregate the diarization estimates (if MPI is used)
+        diarization_estimates.gather()
 
+
+        output_path = Path(_config['experiment_dir']) / f"{dataset_name}_estimates.rttm"
+        pb.array.interval.to_rttm(diarization_estimates, output_path)
 
 
 

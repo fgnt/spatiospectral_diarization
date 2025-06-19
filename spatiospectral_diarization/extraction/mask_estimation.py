@@ -16,7 +16,7 @@ def compute_dominant_mask(scms, eig_val_ratio_th):
     dominant = dominant.T
     return dominant
 
-def compute_smoothed_scms(sigs_stft, kernel_size_scm_smoothing, eig_val_ratio_th):
+def compute_smoothed_scms(sigs_stft, kernel_size_scm_smoothing=3, eig_val_ratio_th=.9,):
     """
        Computes smoothed spatial covariance matrices (SCMs) from the input STFT signals and determines the dominant time-frequency mask.
 
@@ -113,7 +113,7 @@ def get_dominant_time_frequency_mask(sigs_stft, kernel_size_scm_smoothing=3, eig
     dominant *= (eig_val_mem > eig_val_th)
     return dominant
 
-def compute_steering_and_similarity_masks(sigs_stft, sigs, tdoas_segment, k, fft_size, th):
+def compute_steering_and_similarity_masks(sigs_stft, sigs, tdoas_segment, k, fft_size, th=th=.3):
     """
     Computes Instantaneous SCM and reference SCM from the steering vector based on TDOA (Time Difference of Arrival).
     Args:
@@ -140,10 +140,10 @@ def compute_steering_and_similarity_masks(sigs_stft, sigs, tdoas_segment, k, fft
     masks = np.asarray(all_masks).astype(np.float64)
     return masks, inst_scm
 
-def extract_segment_stft_and_context(seg_idx, segments, sigs, sigs_stft_complete, seg_tdoas, max_offset, frame_shift,
-                                     fft_size, context, max_diff_tmp_cl, logger):
+def extract_segment_stft_and_context(seg_idx, segments, sigs, sigs_stft_complete, seg_tdoas, frame_shift,
+                                     fft_size, context, max_diff_tmp_cl, max_offset=0):
     """
-        Extracts the STFT and context information for a given segment.
+        Extracts the STFT and context information and applies wpe for a given segment.
 
         Args:
             seg_idx (int): Index of the segment to extract.
@@ -198,7 +198,7 @@ def extract_segment_stft_and_context(seg_idx, segments, sigs, sigs_stft_complete
     sigs_stft = rearrange(sigs_stft, 'f d t -> d t f')
     return sigs_stft, tdoas_segment, activities, onset, offset
 
-def resolve_mask_ambiguities(masks, tdoas_segment, sigs, k, fft_size, inst_scm, dominant):
+def resolve_mask_ambiguities(masks, tdoas_segment, num_channels, k, fft_size, inst_scm, dominant):
     """
     Resolves ambiguities between masks by deciding, for each mask pair, which mask dominates for each time-frequency bin,
     based on the similarity of the reference SCMs to the current instantaneous SCMs. The SCM are set to one for
@@ -206,7 +206,7 @@ def resolve_mask_ambiguities(masks, tdoas_segment, sigs, k, fft_size, inst_scm, 
     Args:
         masks (np.ndarray): Array of masks (s, t, f).
         tdoas_segment (list): List of TDOA vectors for each segment.
-        sigs (np.ndarray): Input signals to determine the number of channels.
+        num_channels: Number of microphone channels in the recording
         k (np.ndarray): Frequency axis array.
         fft_size (int): FFT size
         inst_scm (np.ndarray): Instantaneous SCMs.
@@ -216,8 +216,8 @@ def resolve_mask_ambiguities(masks, tdoas_segment, sigs, k, fft_size, inst_scm, 
     """
     for i in range(len(masks)):
         for j in range(i + 1, len(masks)):
-            t_i = np.pad(tdoas_segment[i][:len(sigs) - 1], (1, 0))
-            t_j = np.pad(tdoas_segment[j][:len(sigs) - 1], (1, 0))
+            t_i = np.pad(tdoas_segment[i][:num_channels - 1], (1, 0))
+            t_j = np.pad(tdoas_segment[j][:num_channels - 1], (1, 0))
             steer_i = np.exp(-1j * 2 * np.pi * k[:, None] / fft_size * t_i)
             steer_j = np.exp(-1j * 2 * np.pi * k[:, None] / fft_size * t_j)
             ref_scm_i = np.einsum('fc, fd -> fcd', steer_i, steer_i.conj())

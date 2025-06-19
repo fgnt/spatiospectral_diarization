@@ -133,10 +133,8 @@ def get_gcpsd(fft_seg, fft_ref_seg):
     return gcpsd
 
 def get_position_candidates(sigs_stft, frame_wise_activities, dominant, f_min=125, f_max=3500, search_range=200,
-                            avg_len=4, num_peaks=5, sample_rate=16000, max_diff=2, ups_fact =10,
+                            avg_len=4, num_peaks=5, sample_rate=16000, max_diff=2, upsampling=10,
                             max_concurrent=3, distributed=False):
-
-
     assert num_peaks >= max_concurrent
     num_chs = len(sigs_stft)
     fft_size = frame_size = (sigs_stft.shape[-1] -1) * 2
@@ -149,7 +147,7 @@ def get_position_candidates(sigs_stft, frame_wise_activities, dominant, f_min=12
     else:
         k_max = int(np.round(f_max / (sample_rate / 2) * (fft_size // 2 + 1)))
     ch_pairs = get_ch_pairs(num_chs)
-    lags = np.arange(-search_range, search_range + 1 / ups_fact, 1 / ups_fact)
+    lags = np.arange(-search_range, search_range + 1 / upsampling, 1 / upsampling)
     candidates = []
     gcpsd_buffer = \
         np.zeros((len(ch_pairs), avg_len, frame_size // 2 + 1), np.complex128)
@@ -175,12 +173,12 @@ def get_position_candidates(sigs_stft, frame_wise_activities, dominant, f_min=12
                 avg_gcpsd[k_max:] = 0.
             avg_gcpsd = np.concatenate(
                 [avg_gcpsd[:-1],
-                 np.zeros((ups_fact - 1) * (len(avg_gcpsd) - 1) * 2),
+                 np.zeros((upsampling - 1) * (len(avg_gcpsd) - 1) * 2),
                  np.conj(avg_gcpsd)[::-1][:-1]]
             )
             gcc = np.fft.ifftshift(np.fft.ifft(avg_gcpsd).real)
             search_area = \
-                gcc[len(gcc)//2-search_range*ups_fact:len(gcc)//2+search_range*ups_fact+1]
+                gcc[len(gcc)//2-search_range*upsampling:len(gcc)//2+search_range*upsampling+1]
             th = np.maximum(0.75 * np.max(search_area), 0)#2 * np.sqrt(np.mean(search_area[search_area > 0] ** 2))
 
             peaks_pair, _ = find_peaks(search_area)

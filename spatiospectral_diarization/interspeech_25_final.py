@@ -87,12 +87,12 @@ srun python -m {main_python_path} with config.json
 
 @ex.config
 def config():
-    json_path = "/scratch/hpc-prf-nt2/tvn/data/notsofar1/notsofar.json"   #  '/net/vol/tgburrek/db/libriwasn_netdb.json'  #  "/net/vol/jenkins/jsons/notsofar.json" #
-    dsets = ['eval_set_240825.1_eval_full_with_GT']  # ['libriwasn200'] # [libricss, libriwasn200, libriwasn800] # ["train_set_240130.1_train"] #
+    json_path =  '/net/vol/tgburrek/db/libriwasn_netdb.json'  #
+    dsets =['libriwasn200'] # [libricss, libriwasn200, libriwasn800]
 
     setup = 'compact'  # (compact, distributed)
     channels = 'set1' # [set1, set2, set3, all]
-    debug = False  # True testen und so und dann mit 0.5 und 0.25 ausführen
+    debug = False
     tmp_class_th_compact = 0.75
     noctua2 = True
     noctua1 = False
@@ -132,7 +132,6 @@ def libri():
 def noctua():
     noctua2=True
     json_path='/scratch/hpc-prf-nt1/cord/jsons/libriwasn_netdb.json'
-    # json_path='/scratch/hpc-prf-nt2/deegen/deploy/forschung/DiariZen/notsofar.json'
 
 @ex.named_config
 def noctua1():
@@ -172,14 +171,10 @@ def init(_run, _config):
 
 
 def load_notsofar_ref(example, rttm_path):
-    #todo: append statt overwrite machen
-    # oder jeder einzelne datei wie vorher machen ? siehe wasn
     activities = {}
     for spk in example['activity'].keys():
         activities[spk] = pb.array.interval.core.ArrayInterval.from_serializable(example['activity'][spk])
-    # pb.array.interval.rttm.to_rttm({example["example_id"]: activities}, rttm_path)
-    with open(rttm_path, "a") as f:
-        pb.array.interval.rttm.to_rttm({example["example_id"]: activities}, f)
+    pb.array.interval.rttm.to_rttm(pb.array.interval.rttm.to_rttm_str({example["example_id"]: activities}), rttm_path)
     return pb.array.interval.from_rttm(rttm_path)
 
 def estimate_sros(sigs):
@@ -192,7 +187,6 @@ def estimate_sros(sigs):
     th = np.min(energy[energy > 0])
     vad = VoiceActivityDetector(3 * th, len_smooth_win=0)
     ref_act = vad(sigs[0])
-    ref_act = np.array(dilate(pb.array.interval.ArrayInterval(ref_act), 3201))
     ref_act = np.array(erode(pb.array.interval.ArrayInterval(ref_act), 3201))
     for ch_id in range(1, len(sigs)):
         energy = np.sum(
@@ -248,19 +242,9 @@ def solve_permutation(activities, ref_activities):
     for i, act in enumerate(activities):
         for j, ref_act in enumerate(ref_activities):
             overlaps[i, j] = np.sum(act == ref_act)
-    '''costs = []
-    for permutation in permutations(np.arange(len(ref_activities))):
-        cost = 0
-        for j, i in enumerate(permutation):
-            cost += overlaps[i, j]
-            j += 1
-        costs.append(cost)
-    costs = np.asarray(costs)'''
+    # Finds best permutation in terms of recall between estimate and hypothesis
+    # uses linear sum assignment to forgo high complexity for permutations
     _, best_permutation = scipy.optimize.linear_sum_assignment(overlaps.T, maximize=True)
-    '''all_permuations = \
-        [permutation
-         for permutation in permutations(np.arange(len(activities)))]
-    best_permutation = all_permuations[np.argmax(costs)]'''
     return np.asarray(best_permutation)
 
 
@@ -655,10 +639,6 @@ def spatio_spectral_pipeline(json_path, dsets,setup,full_algorithm, tmp_class_th
         distributed = True
     else:
         distributed = False
-
-    device = "rockfall_2"   #  "plaza_0"
-    # rttm_path = Path(experiment_dir) / f'diarization_targets_notsofar.rttm'
-
     #TODO: params
     frame_size_gcc = 4096
     frame_shift_gcc = 1024
@@ -740,7 +720,8 @@ def spatio_spectral_pipeline(json_path, dsets,setup,full_algorithm, tmp_class_th
                     sigs = pb.io.load_audio(session['audio_path']['observation'])[channels]
                 elif 'libriwasn' in subset:
                     sigs = pb.io.load_audio(session['audio_path']['observation']['asnupb7'])
-                elif 'train_set_240825.1_train' in subset or 'eval_set_240825.1_eval_full_with_GT' in subset:
+                elif 'train_set_240130.1_train' in subset:
+                    print("load_signals")
                     sigs = []
                     for i in channels:
                         sigs.append(pb.io.load_audio(session['audio_path']['observation']['mc'][device][i]))

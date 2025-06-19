@@ -9,15 +9,16 @@ This repository implements a spatio-spectral diarization pipeline that makes use
 structure, while replacing the local segmentation stage with a TDOA-based spatial 
 segmentation module.
  
-The segmentation module is based ont he spatial diarization pipeline proposed in
-""
+The segmentation module is based on the spatial diarization pipeline proposed in
+"_Spatial Diarization for Meeting Transcription with Ad-Hoc Acoustic Sensor Networks_, Tobias Gburrek, 
+Joerg Schmalenstroer, Reinhold Haeb-Umbach, 2023 Asilomar Conference" [[link]](https://arxiv.org/abs/2311.15597)
 
 
 > **_NOTE:_**
-This repository is a work in progress. While all essential building blocks are already incorporated, 
+This repository is currently still work in progress. While all essential building blocks are incorporated, 
 the repository will still be undergoing significant and fundamental changes over the next few weeks.
-In addition, code for database preparation and evaluation is still under development and missing in the current
-stage.
+In addition, code for database preparation and evaluation to reproduce the results is still undergoing final 
+revisions and is missing in the current stage.
 Use at your own risk.
 
 # Content
@@ -37,13 +38,14 @@ git clone https://github.com/fgnt/spatiospectral_diarization.git
 pip install spatiospectral_diarization
 ```
 
-In the future, a direct installation from PyPI will be available as well.
+<!-- In the future, a direct installation from PyPI will be available as well.-->
 
-See below and check the example notebook for further details on hot to use the 
-diarization pipeline and exchange parts of it.
+See the code snippet below how to directly apply the pipeline to a recording, 
+or check the example notebook for further details on how to use the diarization pipeline and exchange parts of it 
+(still WIP: to come in the next update).
 
 # Applying the pipeline to a recording
-We provide the full pipeline pre-packaged into a single Python class.
+We provide the full diarization pipeline pre-packaged into a single python class.
 To apply the diarization pipleine to a multi-channel recording, you can use the following code snippet:
 
 ```python
@@ -52,8 +54,6 @@ import paderbox as pb
 
 pipeline = SpatioSpectralDiarization(
     sample_rate=16000,  # Sample rate of the audio data
-    num_channels=4,     # Number of channels in the audio data
-    embedding_model='path/to/your/speaker_embedding_model',  # Path to the pre-trained speaker embedding model
 )
 
 audio_signal = pb.io.load_audio('path/to/your/multi_channel_audio.wav')
@@ -64,6 +64,12 @@ The pipeline expects synchronized signals both in terms of sampling rate offset 
 and sampling time offset (STO). If you want to apply the pipeline to data obtained in a distributed
 setup, e.g. from multiple recoding devices, we recommend applying the synchronization modules from
 paderwasn [TODO link]  to the audio data before applying the diarization pipeline.
+
+The pipeline outputs a dictionary containing the following entries:
+- _diarization_estimate_: a dictionary with the on-and offsets of each speaker detected in the recording
+- _activity_segments_: a list with all segments estimated in the spatial segmentation component
+- _tdoa_vectors_: a list containing the corresponding average time differences of arrival (TDOAs) for each segment
+- _embeddings_: The speaker embeddings for each segment 
 
 
 # Reproducing the LibriWASN & LibriCSS results

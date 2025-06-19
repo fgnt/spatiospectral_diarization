@@ -22,7 +22,7 @@ from spatiospectral_diarization.spatial_diarization.utils import get_position_ca
 from spatiospectral_diarization.spatial_diarization.cluster import temporally_constrained_clustering
 from spatiospectral_diarization.spatial_diarization.utils import (channel_wise_activities,
                                                                   convert_to_frame_wise_activities)
-from spatiospectral_diarization.utils import setup_logger, load_signals, select_channels, merge_and_extract_segments, \
+from spatiospectral_diarization.utils import setup_logger, load_signals, select_channels, merge_overlapping_segments, \
     postprocess_and_get_activities, extract_embeddings, assign_estimated_activities, dump_rttm
 
 ex = Experiment('libriwasn_pipeline_v4')
@@ -92,17 +92,6 @@ def libri():
             'libriwasn_spatiospectral',
             id_naming=NameGenerator(('adjectives', 'colors', 'animals')),
         )
-
-@ex.named_config
-def noctua():
-    noctua2=True
-    json_path='/scratch/hpc-prf-nt1/cord/jsons/libriwasn_netdb.json'
-    # json_path='/scratch/hpc-prf-nt2/deegen/deploy/forschung/DiariZen/notsofar.json'
-
-@ex.named_config
-def noctua1():
-    noctua1=True
-    json_path='/scratch-n2/hpc-prf-nt1/cord/jsons/libriwasn_netdb.json'
 
 @ex.command(unobserved=True)
 def init(_run, _config):
@@ -190,7 +179,7 @@ def spatio_spectral_diarization(json_path, dsets, setup, channels, experiment_di
                     max_temp_dist=max_temp_dist_cl, peak_ratio_th=min_srp_peak_rato
             )
             temp_diary = temp_diary[::-1] #sort segments that segments that start earlier come first
-            segments, seg_tdoas = merge_and_extract_segments(temp_diary, sigs, avg_len_gcc, min_cl_segment, distributed, max_diff_tmp_cl)
+            segments, seg_tdoas = merge_overlapping_segments(temp_diary, sigs.shape[-1], avg_len_gcc, min_cl_segment, distributed, max_diff_tmp_cl)
             ###################################################################
             """ Spatial Diarization """
             est_activities_spatial, labels, num_spk = spatial_diarization(distributed, seg_tdoas, segments, sigs,
@@ -206,8 +195,8 @@ def spatio_spectral_diarization(json_path, dsets, setup, channels, experiment_di
             )
             for seg_idx in range(len(segments)):
                 sigs_stft, tdoas_segment, activities, onset, offset = extract_segment_stft_and_context(seg_idx, segments,
-                                                                    sigs, sigs_stft_complete, seg_tdoas, max_offset,
-                                                                    frame_shift, fft_size, context, max_diff_tmp_cl, logger)
+                                                                    sigs, sigs_stft_complete, seg_tdoas,
+                                                                    frame_shift, fft_size, context, max_diff_tmp_cl,max_offset)
                 scms, dominant = compute_smoothed_scms(sigs_stft, kernel_size_scm_smoothing, eig_val_ratio_th)
 
                 k = np.arange(fft_size // 2 + 1)

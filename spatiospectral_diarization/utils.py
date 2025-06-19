@@ -219,7 +219,7 @@ def load_signals(session: dict, channels: np.ndarray, setup: str, subset: str, l
         raise
     return sigs
 
-def merge_and_extract_segments(temp_diary, sigs, avg_len_gcc, min_cl_segment, distributed, max_diff_tmp_cl):
+def merge_overlapping_segments(temp_diary, recording_length, avg_len_gcc, min_cl_segment, distributed, max_diff_tmp_cl):
     """
     Merges overlapping segments from the same direction. For each segment, the corresponding activity interval and the
     median TDOA (Time Difference of Arrival).
@@ -245,7 +245,7 @@ def merge_and_extract_segments(temp_diary, sigs, avg_len_gcc, min_cl_segment, di
         if len(entry[1]) <= min_cl_segment:
             continue
         med_tdoa = np.median(entry[0], 0)
-        act = pb.array.interval.zeros(sigs.shape[-1])
+        act = pb.array.interval.zeros(recording_length)
         onset = np.maximum((np.min(entry[1]) - avg_len_gcc) * 1024, 0)
         offset = np.max(entry[1]) * 1024 + 4096
         act.add_intervals([slice(onset, offset), ])
@@ -273,8 +273,8 @@ def merge_and_extract_segments(temp_diary, sigs, avg_len_gcc, min_cl_segment, di
         seg_tdoas.append(med_tdoa)
     return segments, seg_tdoas
 
-def postprocess_and_get_activities(masks, tdoas_segment, k_min, k_max, act_th, min_len, dilation_len_beam,
-                                   erosion_len_beam, additional_dilate, cacgmm_param, reduce_tdoas):
+def postprocess_and_get_activities(masks, tdoas_segment, k_min=10, k_max=225, act_th=0.2, min_len=32, dilation_len_beam=127,
+                                   erosion_len_beam=127, additional_dilate=False, cacgmm_param=False, reduce_tdoas=True):
     """
     Post-processes time-frequency masks and extracts segment activities.
     This function takes a set of masks and their corresponding TDOA segments, applies morphological operations
@@ -323,7 +323,7 @@ def postprocess_and_get_activities(masks, tdoas_segment, k_min, k_max, act_th, m
     seg_acitivities = np.asarray(seg_acitivities)
     return masks, seg_acitivities, tdoas_reduced, phantom
 
-def assign_estimated_activities(labels, activities_red, embeddings_red, sigs):
+def assign_estimated_activities(labels, activities_red, embeddings_red, recording_len):
     """
     Takes labeled embeddings and their activities, and creates an array with the estimated activities of each speaker.
 
@@ -335,13 +335,13 @@ def assign_estimated_activities(labels, activities_red, embeddings_red, sigs):
         activities_red (list of tuple): List of \(`onset`, `offset`\) tuples for each segment.
         embeddings_red (np.ndarray): Embeddings for each segment.
         num_spk (int): Number of detected speakers.
-        sigs (np.ndarray): Signal array to determine the total number of frames.
+        recording_len:  total number of frames in the recording.
 
     Returns:
         np.ndarray: Estimated activities matrix of shape (`num_spk`, `num_frames`).
     """
     num_spk = np.max(labels) + 1
-    est_activities = np.zeros((num_spk, sigs.shape[-1]))
+    est_activities = np.zeros((num_spk, recording_len))
     for spk_id in range(num_spk):
         for i in range(len(activities_red)):
             if labels[i] == spk_id:
