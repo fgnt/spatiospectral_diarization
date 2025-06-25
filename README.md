@@ -7,7 +7,7 @@ local segmentation module followed by a global speaker assignment which assigns 
 respective speaker identity to each segment. 
 This repository implements a spatio-spectral diarization pipeline that makes use of the same 
 structure, while replacing the local segmentation stage with a TDOA-based spatial 
-segmentation module.
+segmentation module, as introduced in [_Spatio-spectral diarization of meetings by combining TDOA-based segmentation and speaker embedding-based clustering_](https://arxiv.org/abs/2506.16228).
  
 The segmentation module is based on the spatial diarization pipeline proposed in
 "_Spatial Diarization for Meeting Transcription with Ad-Hoc Acoustic Sensor Networks_, Tobias Gburrek, 
@@ -24,8 +24,8 @@ Use at your own risk.
 # Content
 - A multi-channel, spatio-spectral diarization pipeline
   - A spatial multi-channel segmentation module utilizing time difference of arrival (TDOA) features
-    - A global speaker assignment module using d-vector-based speaker embeddings
-- Scripts to reproduce the results of the reference publication
+  - A global speaker assignment module using d-vector-based speaker embeddings
+- Scripts to reproduce the results of the reference publication [[link to the paper]](https://arxiv.org/abs/2506.16228)
   - Diarization of the LibriWASN and LibriCSS datasets
   - Evaluation in a semi-static meeting scenario 
 - Modular design to enable further research and exchanging individual 
@@ -63,10 +63,10 @@ output = pipeline(audio_signal)
 The pipeline expects synchronized signals both in terms of sampling rate offset (SRO)
 and sampling time offset (STO). If you want to apply the pipeline to data obtained in a distributed
 setup, e.g. from multiple recoding devices, we recommend applying the synchronization modules from
-paderwasn [TODO link]  to the audio data before applying the diarization pipeline.
+[paderwasn](https://github.com/fgnt/paderwasn)   to the audio data before applying the diarization pipeline.
 
 The pipeline outputs a dictionary containing the following entries:
-- _diarization_estimate_: a dictionary with the on-and offsets of each speaker detected in the recording
+- _diarization_estimate_: a dictionary containing all speakers with on-and offsets of each speaker detected in the recording
 - _activity_segments_: a list with all segments estimated in the spatial segmentation component
 - _tdoa_vectors_: a list containing the corresponding average time differences of arrival (TDOAs) for each segment
 - _embeddings_: The speaker embeddings for each segment 
@@ -78,17 +78,20 @@ The pipeline outputs a dictionary containing the following entries:
 
 ## LibriCSS & LibriWASN
 
-## Semi-static meeting scenario
+### Semi-static meeting scenario
 
 
 # Citation
-To cite the spatio-spectral diarization pipeline, please cite the following publication:
+To cite this package, please refer to the following publication:
 
 ```
-@InProceedings{cordgburrek2025spatiospectral_diarization,
-  Title                    = {Spatio-spectral diarization of meetings by combining {TDOA}-based segmentation and speaker embedding-based clustering},
-  Author                   = {Cord-Landwehr, Tobias and Gburrek, Tobias and Deegen, Marc and Haeb-Umbach, Reinhold},
-  Year                     = {2025},
-  Month                    = {Aug}
+@misc{cordgburrek2025spatiospectral_diarization,
+      title={Spatio-spectral diarization of meetings by combining {TDOA}-based segmentation and speaker embedding-based clustering}, 
+      author={Tobias Cord-Landwehr and Tobias Gburrek and Marc Deegen and Reinhold Haeb-Umbach},
+      year={2025},
+      eprint={2506.16228},
+      archivePrefix={arXiv},
+      primaryClass={eess.AS},
+      url={https://arxiv.org/abs/2506.16228}, 
 }
 ```
