@@ -22,7 +22,7 @@ from spatiospectral_diarization.utils import (postprocess_and_get_activities, as
 
 from speaker_reassignment.tcl_pretrained import PretrainedModel
 import paderbox as pb
-from utils import merge_overlapping_segments
+from .utils import merge_overlapping_segments
 
 
 @dataclass
@@ -38,8 +38,8 @@ class SpatioSpectralDiarization:
     """
     embedding_extractor: callable = PretrainedModel()
     vad_module: callable = channel_wise_activities
-    stft_params_gcc: ClassVar = {'stft_size': 4096, 'shift': 1024, 'fading': False, 'pad': False, 'window': 'hann'}
-    stft_params_bf: ClassVar = {'stft_size': 1024, 'shift': 256, 'fading': False, 'pad': False, 'window': 'hann'}
+    stft_params_gcc: ClassVar = {'size': 4096, 'shift': 1024, 'fading': False, 'pad': False, 'window': 'hann'}
+    stft_params_bf: ClassVar = {'size': 1024, 'shift': 256, 'fading': False, 'pad': False, 'window': 'hann'}
 
     sample_rate: int = 16_000
 
@@ -70,7 +70,7 @@ class SpatioSpectralDiarization:
     def apply_vad(self, recording):
         vad_indexer = self.vad_module(recording)
         return convert_to_frame_wise_activities(vad_indexer, th=0.5, frame_shift=self.stft_params_gcc['shift'],
-                                                frame_size=self.stft_params_gcc['stft_size'])
+                                                frame_size=self.stft_params_gcc['size'])
 
     def spatial_segmentation(self, recording, vad_indexer):
 
@@ -109,7 +109,7 @@ class SpatioSpectralDiarization:
                                                                                                    frame_shift=self.stft_params_bf['shift'],
                                                                                                    fft_size=fft_size,
                                                                                                    max_diff_tmp_cl=self.tdoa_settings['max_diff_tmp_cl'],
-                                                                                                   context=3.self.sample_rate)
+                                                                                                   context=3*self.sample_rate)
             scms, dominant = compute_smoothed_scms(segment_stft)
 
             k = np.arange(fft_size // 2 + 1)
@@ -172,18 +172,18 @@ class SpatioSpectralDiarization:
 
 
         if self.only_spatial_dia:
-            est_activities_spatial, labels, num_spk = spatial_diarization(distributed=self.tdoa_settings['distributed'], segment_tdoas, segments, recording,
+            est_activities_spatial, labels, num_spk = spatial_diarization(self.tdoa_settings['distributed'], segment_tdoas, segments, recording,
                                                                           dilation_len_spatial=32001,
                                                                           dilation_len_spatial_add=8001)
             spatial_diarization = {spk: pb.array.interval.ArrayInterval(act.astype(bool))
                                      for spk, act in enumerate(est_activities_spatial)}
             return {'diarization_estimate': spatial_diarization,
                     'segments':segments,
-                    'segment_tdoas': segment_tdoas
+                    'segment_tdoas': segment_tdoas,
                     'num_spk': num_spk}
 
         #Obtain segment-wise masks apply beamforming from TDOA segments, and extract embeddings
-        embeddings, seg_boundaries)= self.segment_wise_beamforming_and_embedding_extraction(recording, segments,
+        embeddings, seg_boundaries= self.segment_wise_beamforming_and_embedding_extraction(recording, segments,
                                                                                                          segment_tdoas)
 
         # Perform Clustering on the extracted embeddings
@@ -194,9 +194,9 @@ class SpatioSpectralDiarization:
                                      for spk, act in enumerate(est_activities)}
         return {
             'diarization_estimate': diarization_estimate,
-            'embeddings': embeddings
+            'embeddings': embeddings,
             'segments': segments,
-            'segment_tdoas': segment_tdoas
+            'segment_tdoas': segment_tdoas,
             'num_spk': len(set(labels))
         }
 

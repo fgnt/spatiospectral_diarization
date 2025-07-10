@@ -113,7 +113,7 @@ def get_dominant_time_frequency_mask(sigs_stft, kernel_size_scm_smoothing=3, eig
     dominant *= (eig_val_mem > eig_val_th)
     return dominant
 
-def compute_steering_and_similarity_masks(sigs_stft, sigs, tdoas_segment, k, fft_size, th=th=.3):
+def compute_steering_and_similarity_masks(sigs_stft, sigs, tdoas_segment, k, fft_size, th=.3):
     """
     Computes Instantaneous SCM and reference SCM from the steering vector based on TDOA (Time Difference of Arrival).
     Args:
