@@ -1,8 +1,11 @@
 from dataclasses import dataclass
 from typing import ClassVar
 
+import einops
 import numpy as np
-from spatiospectral_diarization.spatial_diarization.diarize import spatial_diarization
+
+from spatiospectral_diarization.spatial_diarization.cluster import temporally_constrained_clustering
+import spatiospectral_diarization.spatial_diarization as spatial_dia
 from spatiospectral_diarization.spatial_diarization.utils import get_position_candidates
 from spatiospectral_diarization.embedding_based_clustering import embeddings_hdbscan_clustering
 
@@ -47,11 +50,11 @@ class SpatioSpectralDiarization:
                                'search_range': 5,
                                'f_min': 125,
                                'f_max':None,
-                               'avg_len_gcc': 4,
+                               'avg_len': 4,
                                'distributed': False}
 
-    segmentation_settings: ClassVar = {'max_diff_tmp_cl': 0.75, 'min_srp_peak_rato':.5,
-                                       'max_temp_dist_cl':16}
+    segmentation_settings: ClassVar = {'max_dist': 0.75, 'peak_ratio_th':.5,
+                                       'max_temp_dist':16}
 
     clustering: callable = embeddings_hdbscan_clustering
     only_spatial_dia: bool = False
@@ -85,36 +88,36 @@ class SpatioSpectralDiarization:
 
         segments = temporally_constrained_clustering(tdoa_candidates, **self.segmentation_settings)
 
-        segments = segment[::-1] # ouput of temporal clustering is in temporla reverse order
+        segments = segments[::-1] # ouput of temporal clustering begins with the last segment in the meeting
 
         segments, segment_tdoas = merge_overlapping_segments(segments, recording.shape[-1],
-                                                             avg_len_gcc=self.tdoa_settings['avg_len_gcc'],
+                                                             avg_len_gcc=self.tdoa_settings['avg_len'],
                                                              min_cl_segment=3,
                                                              distributed=self.tdoa_settings['distributed'],
-                                                             max_diff_tmp_cl=self.tdoa_settings['max_diff_tmp_cl']
+                                                             max_diff_tmp_cl=self.tdoa_settings['max_diff']
                                                              )
         return segments, segment_tdoas
 
     def segment_wise_beamforming_and_embedding_extraction(self, recording, segments, segment_tdoas):
         recording_stft = self.stft_bf(recording)
-        fft_size = self.stft_params_bf['stft_size'],
+        fft_size = self.stft_params_bf['size']
         num_channels = recording.shape[0]
         embeddings = []
         seg_boundaries = []
+        scms, dominant = compute_smoothed_scms(recording_stft)
         for cur_segment in range(len(segments)):
             segment_stft, tdoas_segment, activities, onset, offset = extract_segment_stft_and_context(cur_segment, segments,
-                                                                                                   sigs,
+                                                                                                   recording,
                                                                                                    recording_stft,
-                                                                                                   seg_tdoas,
+                                                                                                   segment_tdoas,
                                                                                                    frame_shift=self.stft_params_bf['shift'],
                                                                                                    fft_size=fft_size,
-                                                                                                   max_diff_tmp_cl=self.tdoa_settings['max_diff_tmp_cl'],
+                                                                                                   max_diff_tmp_cl=self.tdoa_settings['max_diff'],
                                                                                                    context=3*self.sample_rate)
-            scms, dominant = compute_smoothed_scms(segment_stft)
 
             k = np.arange(fft_size // 2 + 1)
             """ Compute masks, postprocess the masks and activities"""
-            masks, inst_scm = compute_steering_and_similarity_masks(sigs_stft, sigs, tdoas_segment, k, fft_size )
+            masks, inst_scm = compute_steering_and_similarity_masks(recording_stft, recording, tdoas_segment, k, fft_size )
             masks = resolve_mask_ambiguities(masks, tdoas_segment, num_channels, k, fft_size, inst_scm, dominant)
             masks, seg_activities, tdoas_reduced, phantom = postprocess_and_get_activities(masks, tdoas_segment)
             if phantom:
@@ -122,23 +125,22 @@ class SpatioSpectralDiarization:
 
 
             if self.apply_cacgmm_refinement:
-                masks = cacgmm_mask_refinement(masks, sigs_stft, seg_activities, dominant, fft_size, logger)
-                masks, seg_activities, _, phantom = postprocess_and_get_activities(masks, tdoas_segment)
+                masks = cacgmm_mask_refinement(masks, recording_stft, seg_activities, dominant, fft_size)
+                masks, seg_activities, _, phantom = postprocess_and_get_activities(masks, tdoas_reduced)
                 if phantom:
                     continue  # skip segments of phantom speakers
 
 
             else:
-                ##################################################
                 """ Compute masks, postprocess the masks and activities"""
-                masks, inst_scm = compute_steering_and_similarity_masks(sigs_stft, sigs, tdoas_reduced, k, fft_size)
-                masks = resolve_mask_ambiguities(masks, tdoas_reduced, sigs, k, fft_size, inst_scm, dominant)
+                masks, inst_scm = compute_steering_and_similarity_masks(recording_stft, recording, tdoas_reduced, k, fft_size)
+                masks = resolve_mask_ambiguities(masks, tdoas_reduced, recording, k, fft_size, inst_scm, dominant)
                 masks, seg_activities, tdoas_reduced, phantom = postprocess_and_get_activities(masks, tdoas_reduced, act=0.3)
                 if phantom:
                     continue  # skip segments of phantom speakers
 
             """Beamform the signals using the masks"""
-            sig_segs, seg_onsets = time_varying_mvdr(sigs_stft, rearrange(masks, 's t f -> s f t'),
+            sig_segs, seg_onsets = time_varying_mvdr(recording_stft, einops.rearrange(masks, 's t f -> s f t'),
                                                      seg_activities.astype(bool), wpe=False)
             # Extract the speaker embedding from each segment
             embeddings, seg_boundaries = extract_embeddings(embeddings, seg_boundaries, sig_segs, seg_onsets,
@@ -172,7 +174,7 @@ class SpatioSpectralDiarization:
 
 
         if self.only_spatial_dia:
-            est_activities_spatial, labels, num_spk = spatial_diarization(self.tdoa_settings['distributed'], segment_tdoas, segments, recording,
+            est_activities_spatial, labels, num_spk = spatial_dia.diarize.spatial_diarization(self.tdoa_settings['distributed'], segment_tdoas, segments, recording,
                                                                           dilation_len_spatial=32001,
                                                                           dilation_len_spatial_add=8001)
             spatial_diarization = {spk: pb.array.interval.ArrayInterval(act.astype(bool))

@@ -202,11 +202,11 @@ def spatio_spectral_diarization(json_path, dsets, setup, channels, experiment_di
                 k = np.arange(fft_size // 2 + 1)
                 """ Compute masks, postprocess the masks and activities"""
                 masks, inst_scm = compute_steering_and_similarity_masks(sigs_stft, sigs, tdoas_segment, k, fft_size, th)
-                masks = resolve_mask_ambiguities(masks, tdoas_segment, sigs, k, fft_size, inst_scm, dominant)
+                masks = resolve_mask_ambiguities(masks, tdoas_segment, sigs.shape[0], k, fft_size, inst_scm, dominant)
                 masks, seg_acitivities, tdoas_reduced, phantom = postprocess_and_get_activities(masks, tdoas_segment,
                                                                                                 k_min, k_max, act_th, min_len,
                                                                                                 dilation_len_beam, erosion_len_beam,
-                                                                                                logger, additional_dilate=False,
+                                                                                                additional_dilate=False,
                                                                                                 cacgmm_param=False, reduce_tdoas=True)
                 if phantom:
                     continue # skip segments of phantom speakers
@@ -217,7 +217,7 @@ def spatio_spectral_diarization(json_path, dsets, setup, channels, experiment_di
                 masks, seg_acitivities, _, phantom = postprocess_and_get_activities(masks, tdoas_segment,
                                                                                     k_min, k_max, act_th, min_len,
                                                                                     dilation_len_beam, erosion_len_beam,
-                                                                                    logger, additional_dilate=True,
+                                                                                    additional_dilate=True,
                                                                                     cacgmm_param=True, reduce_tdoas=False)
                 if phantom:
                     continue # skip segments of phantom speakers

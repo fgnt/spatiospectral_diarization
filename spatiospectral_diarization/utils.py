@@ -252,7 +252,7 @@ def merge_overlapping_segments(temp_diary, recording_length, avg_len_gcc, min_cl
         to_remove = []
         for o, other in enumerate(temp_diary_[i + 1:]):
             if np.linalg.norm(np.median(other[0], 0) - med_tdoa) <= max_diff_tmp_cl:
-                other_act = pb.array.interval.zeros(sigs.shape[-1])
+                other_act = pb.array.interval.zeros(recording_length)
                 onset = np.maximum((np.min(other[1]) - avg_len_gcc) * 1024, 0)
                 offset = np.max(other[1]) * 1024 + 4096
                 other_act.add_intervals([slice(onset, offset), ])
@@ -265,7 +265,7 @@ def merge_overlapping_segments(temp_diary, recording_length, avg_len_gcc, min_cl
         for remove_id in to_remove[::-1]:
             temp_diary_.pop(remove_id)
         med_tdoa = np.median(entry[0], 0)
-        act = pb.array.interval.zeros(sigs.shape[-1])
+        act = pb.array.interval.zeros(recording_length)
         onset = np.maximum((np.min(entry[1]) - avg_len_gcc) * 1024, 0)
         offset = np.max(entry[1]) * 1024 + 4096
         act.add_intervals([slice(onset, offset), ])

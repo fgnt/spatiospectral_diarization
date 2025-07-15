@@ -202,7 +202,7 @@ def resolve_mask_ambiguities(masks, tdoas_segment, num_channels, k, fft_size, in
     """
     Resolves ambiguities between masks by deciding, for each mask pair, which mask dominates for each time-frequency bin,
     based on the similarity of the reference SCMs to the current instantaneous SCMs. The SCM are set to one for
-    the tf-bins in which both masks are active simulataneously when they are closer to inst_SCM than the other ref_SCM.
+    the tf-bins in which both masks are active simultaneously when they are closer to inst_SCM than the other ref_SCM.
     Args:
         masks (np.ndarray): Array of masks (s, t, f).
         tdoas_segment (list): List of TDOA vectors for each segment.
@@ -232,7 +232,7 @@ def resolve_mask_ambiguities(masks, tdoas_segment, num_channels, k, fft_size, in
     return masks
 
 
-def cacgmm_mask_refinement(masks, sigs_stft, seg_acitivities, dominant, fft_size, logger, weight_constant_axis=-3,
+def cacgmm_mask_refinement(masks, sigs_stft, seg_acitivities, dominant, fft_size,  weight_constant_axis=-3,
                            max_val=0.8, num_iterations=10):
     """
     Predicts time-frequency masks using the Complex Angular Central Gaussian Mixture Model (CACGMM).
@@ -248,7 +248,7 @@ def cacgmm_mask_refinement(masks, sigs_stft, seg_acitivities, dominant, fft_size
     Returns:
         np.ndarray: Predicted masks for each segment, shape (num_segments, time, frequency).
     """
-    logger.info('CACGMM')
+
     trainer = CACGMMTrainer()
     permutation_aligner = DHTVPermutationAlignment.from_stft_size(fft_size)
     input_mm = rearrange(sigs_stft, 'd t f -> f t d')
