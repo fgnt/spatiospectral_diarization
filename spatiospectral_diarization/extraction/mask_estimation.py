@@ -233,7 +233,7 @@ def resolve_mask_ambiguities(masks, tdoas_segment, num_channels, k, fft_size, in
 
 
 def cacgmm_mask_refinement(masks, sigs_stft, seg_acitivities, dominant, fft_size,  weight_constant_axis=-3,
-                           max_val=0.8, num_iterations=10):
+                           max_val=0.8, num_iterations=10, track_noise_component=False):
     """
     Predicts time-frequency masks using the Complex Angular Central Gaussian Mixture Model (CACGMM).
     This function initializes and fits a CACGMM to the input STFT signals, using provided segment activities and a dominance mask.
@@ -268,4 +268,10 @@ def cacgmm_mask_refinement(masks, sigs_stft, seg_acitivities, dominant, fft_size
     )
     refined_masks = cacgmm.predict(input_mm)
     refined_masks = rearrange(refined_masks, 'f s t -> s t f')
+    if track_noise_component:
+        mask_activities = np.sum(refined_masks, axis=(1,2))
+        noise_idx = np.argmax(mask_activities)
+        refined_masks = np.delete(refined_masks, noise_idx, axis=0)
+    else:
+        refined_masks = refined_masks[:-1,...]
     return refined_masks

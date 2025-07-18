@@ -125,8 +125,9 @@ class SpatioSpectralDiarization:
 
 
             if self.apply_cacgmm_refinement:
-                masks = cacgmm_mask_refinement(masks, recording_stft, seg_activities, dominant, fft_size)
-                masks, seg_activities, _, phantom = postprocess_and_get_activities(masks[:-1,...], tdoas_reduced)
+                masks = cacgmm_mask_refinement(masks, recording_stft, seg_activities, dominant, fft_size,
+                                               track_noise_component=True)
+                masks, seg_activities, _, phantom = postprocess_and_get_activities(masks, tdoas_reduced)
                 if phantom:
                     continue  # skip segments of phantom speakers
             else:
