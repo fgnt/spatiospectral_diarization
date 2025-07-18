@@ -131,7 +131,7 @@ def compute_steering_and_similarity_masks(sigs_stft, sigs, tdoas_segment, k, fft
     inst_scm = np.einsum('ctf, dtf -> tfcd', sigs_stft, sigs_stft.conj())
     inst_scm /= abs(inst_scm) + 1e-18
     for t in tdoas_segment:
-        t_ = np.pad(t[:len(sigs) - 1], (1, 0))
+        t_ = np.pad(t[sigs.shape[0] - 1], (1, 0))
         steer = np.exp(-1j * 2 * np.pi * k[:, None] / fft_size * t_)
         ref_scm = np.einsum('fc, fd -> fcd', steer, steer.conj())
         sim = correlation_matrix_distance(ref_scm, inst_scm)
