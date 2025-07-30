@@ -32,13 +32,30 @@ from .utils import merge_overlapping_segments
 @dataclass
 class SpatioSpectralDiarization:
     """
-    A class to represent a spatio-spectral diarization pipeline.
+    Modularized class of the spatiospectral diarization pipeline.
 
     Attributes:
-        model: The model used for diarization.
-        num_classes: The number of classes (speakers) to be identified.
-        iterations: The number of iterations for the training process.
-        saliency: Optional saliency map for enhancing features.
+        embedding_extractor: callable; returns speaker embedding for a given time-domain signal
+        vad_module: callable; returns a channel-wise activity indexer for a given recording
+        stft_params_gcc: dict; parameters for the STFT used for GCC-PHAT
+        stft_params_bf: dict; parameters for the STFT used for beamforming
+        sample_rate: int; sample rate of the input recording
+        tdoa_settings: dict; settings for TDOA estimation
+            max_diff: float; maximum difference in TDOA for clustering
+            search_range: int; maximal delay in samples that is evaluated for peak detection in GCC-PHAT, default 5
+            f_min: int; minimal frequency during TDOA peak detection, default 125 Hz
+            f_max: int; maximal frequency during TDOA peak detection, default None (sample_rate/2)
+            avg_len: int; length of the averaging window for TDOA estimation, default 4
+            distributed: bool; specifies whether TDOA estimation is performend in a distreibuted microphone setup
+        segmentation_settings: dict; settings for temporal clustering of TDOA candidates
+            max_dist: float; maximum distance between TDOA candidates for clustering, default 0.75
+            peak_ratio_th: float; threshold for peak ratio in clustering, default 0.5
+            max_temp_dist: int; maximum temporal distance between TDOA candidates for clustering, default 16
+
+        clustering: callable; clustering function for the extracted speaker embeddings
+        only_spatial_dia: bool; if True, only spatial diarization is performed without embedding extraction and clustering
+        apply_cacgmm_refinement: bool; if True, applies CACGMM refinement to the masks before beamforming
+
     """
     embedding_extractor: callable = PretrainedModel()
     vad_module: callable = channel_wise_activities
@@ -122,7 +139,7 @@ class SpatioSpectralDiarization:
             masks = resolve_mask_ambiguities(masks, tdoas_segment, num_channels, k, fft_size, inst_scm, dominant)
             masks, seg_activities, tdoas_reduced, phantom = postprocess_and_get_activities(masks, tdoas_segment)
             if phantom:
-                continue  # skip segments of phantom speakers
+                continue  # skip segments of phantom speakers  (caused by reflections)
 
 
             if self.apply_cacgmm_refinement:
@@ -130,14 +147,14 @@ class SpatioSpectralDiarization:
                                                track_noise_component=True)
                 masks, seg_activities, _, phantom = postprocess_and_get_activities(masks, tdoas_reduced)
                 if phantom:
-                    continue  # skip segments of phantom speakers
+                    continue  # skip segments of phantom speakers (caused by reflections)
             else:
                 """ Compute masks, postprocess the masks and activities"""
                 masks, inst_scm = compute_steering_and_similarity_masks(segment_stft, num_channels, tdoas_reduced, k, fft_size)
                 masks = resolve_mask_ambiguities(masks, tdoas_reduced, num_channels, k, fft_size, inst_scm, dominant)
                 masks, seg_activities, tdoas_reduced, phantom = postprocess_and_get_activities(masks, tdoas_reduced, act_th=0.3)
                 if phantom:
-                    continue  # skip segments of phantom speakers
+                    continue  # skip segments of phantom speakers  (caused by reflections)
 
             """Beamform the signals using the masks"""
             sig_segs, seg_onsets = time_varying_mvdr(segment_stft, einops.rearrange(masks, 's t f -> s f t'),
@@ -152,10 +169,11 @@ class SpatioSpectralDiarization:
         Process an example through the diarization pipeline.
 
         Args:
-            example: A dictionary containing the audio data and metadata.
+            recording: Multi-channel recording of shape (num_channels, num_samples).
 
         Returns:
-            A dictionary with processed features and metadata.
+            A dictionary with the diarization estimate, embeddings, segment boundaries, segment TDOAs,
+            and estimated number of speakers.
         """
         recording = self.normalize_recording(recording)
 
