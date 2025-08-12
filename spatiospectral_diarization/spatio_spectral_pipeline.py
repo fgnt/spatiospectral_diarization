@@ -3,9 +3,12 @@ from typing import ClassVar
 
 import einops
 import numpy as np
+from speaker_reassignment.tcl_pretrained import PretrainedModel
+import paderbox as pb
 
 from spatiospectral_diarization.spatial_diarization.cluster import temporally_constrained_clustering
 import spatiospectral_diarization.spatial_diarization as spatial_dia
+import spatiospectral_diarization.spatial_diarization.diarize
 from spatiospectral_diarization.spatial_diarization.utils import get_position_candidates
 from spatiospectral_diarization.embedding_based_clustering import embeddings_hdbscan_clustering
 
@@ -23,8 +26,6 @@ from spatiospectral_diarization.extraction.beamformer import time_varying_mvdr
 from spatiospectral_diarization.utils import (postprocess_and_get_activities, assign_estimated_activities,
                                               extract_embeddings)
 
-from speaker_reassignment.tcl_pretrained import PretrainedModel
-import paderbox as pb
 from .utils import merge_overlapping_segments
 
 
@@ -104,7 +105,6 @@ class SpatioSpectralDiarization:
         num_channels = recording.shape[0]
         embeddings = []
         seg_boundaries = []
-        scms, dominant = compute_smoothed_scms(recording_stft)
         for cur_segment in range(len(segments)):
             segment_stft, tdoas_segment, activities, onset, offset = extract_segment_stft_and_context(cur_segment, segments,
                                                                                                    recording,
@@ -114,10 +114,11 @@ class SpatioSpectralDiarization:
                                                                                                    fft_size=fft_size,
                                                                                                    max_diff_tmp_cl=self.tdoa_settings['max_diff'],
                                                                                                    context=3*self.sample_rate)
+            scms, dominant = compute_smoothed_scms(segment_stft)
 
             k = np.arange(fft_size // 2 + 1)
             """ Compute masks, postprocess the masks and activities"""
-            masks, inst_scm = compute_steering_and_similarity_masks(recording_stft, recording, tdoas_segment, k, fft_size )
+            masks, inst_scm = compute_steering_and_similarity_masks(segment_stft, num_channels, tdoas_segment, k, fft_size )
             masks = resolve_mask_ambiguities(masks, tdoas_segment, num_channels, k, fft_size, inst_scm, dominant)
             masks, seg_activities, tdoas_reduced, phantom = postprocess_and_get_activities(masks, tdoas_segment)
             if phantom:
@@ -125,21 +126,21 @@ class SpatioSpectralDiarization:
 
 
             if self.apply_cacgmm_refinement:
-                masks = cacgmm_mask_refinement(masks, recording_stft, seg_activities, dominant, fft_size,
+                masks = cacgmm_mask_refinement(masks, segment_stft, seg_activities, dominant, fft_size,
                                                track_noise_component=True)
                 masks, seg_activities, _, phantom = postprocess_and_get_activities(masks, tdoas_reduced)
                 if phantom:
                     continue  # skip segments of phantom speakers
             else:
                 """ Compute masks, postprocess the masks and activities"""
-                masks, inst_scm = compute_steering_and_similarity_masks(recording_stft, recording, tdoas_reduced, k, fft_size)
-                masks = resolve_mask_ambiguities(masks, tdoas_reduced, recording, k, fft_size, inst_scm, dominant)
-                masks, seg_activities, tdoas_reduced, phantom = postprocess_and_get_activities(masks, tdoas_reduced, act=0.3)
+                masks, inst_scm = compute_steering_and_similarity_masks(segment_stft, num_channels, tdoas_reduced, k, fft_size)
+                masks = resolve_mask_ambiguities(masks, tdoas_reduced, num_channels, k, fft_size, inst_scm, dominant)
+                masks, seg_activities, tdoas_reduced, phantom = postprocess_and_get_activities(masks, tdoas_reduced, act_th=0.3)
                 if phantom:
                     continue  # skip segments of phantom speakers
 
             """Beamform the signals using the masks"""
-            sig_segs, seg_onsets = time_varying_mvdr(recording_stft, einops.rearrange(masks, 's t f -> s f t'),
+            sig_segs, seg_onsets = time_varying_mvdr(segment_stft, einops.rearrange(masks, 's t f -> s f t'),
                                                      seg_activities.astype(bool), wpe=False)
             # Extract the speaker embedding from each segment
             embeddings, seg_boundaries = extract_embeddings(embeddings, seg_boundaries, sig_segs, seg_onsets,
@@ -156,7 +157,6 @@ class SpatioSpectralDiarization:
         Returns:
             A dictionary with processed features and metadata.
         """
-
         recording = self.normalize_recording(recording)
 
 
