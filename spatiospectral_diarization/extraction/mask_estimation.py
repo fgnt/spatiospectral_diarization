@@ -113,7 +113,7 @@ def get_dominant_time_frequency_mask(sigs_stft, kernel_size_scm_smoothing=3, eig
     dominant *= (eig_val_mem > eig_val_th)
     return dominant
 
-def compute_steering_and_similarity_masks(sigs_stft, sigs, tdoas_segment, k, fft_size, th=.3):
+def compute_steering_and_similarity_masks(sigs_stft, num_channels, tdoas_segment, k, fft_size, th=.3):
     """
     Computes Instantaneous SCM and reference SCM from the steering vector based on TDOA (Time Difference of Arrival).
     Args:
@@ -131,7 +131,7 @@ def compute_steering_and_similarity_masks(sigs_stft, sigs, tdoas_segment, k, fft
     inst_scm = np.einsum('ctf, dtf -> tfcd', sigs_stft, sigs_stft.conj())
     inst_scm /= abs(inst_scm) + 1e-18
     for t in tdoas_segment:
-        t_ = np.pad(t[sigs.shape[0] - 1], (1, 0))
+        t_ = np.pad(t[num_channels - 1], (1, 0))
         steer = np.exp(-1j * 2 * np.pi * k[:, None] / fft_size * t_)
         ref_scm = np.einsum('fc, fd -> fcd', steer, steer.conj())
         sim = correlation_matrix_distance(ref_scm, inst_scm)
