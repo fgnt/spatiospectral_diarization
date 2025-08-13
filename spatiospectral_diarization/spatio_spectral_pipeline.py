@@ -170,7 +170,8 @@ class SpatioSpectralDiarization:
 
         Args:
             recording: Multi-channel recording of shape (num_channels, num_samples).
-
+            vad_indexer: Optional; channel-wise activity indexer with sample resolution.
+                If not provided, the VAD module will be applied to infer this information.
         Returns:
             A dictionary with the diarization estimate, embeddings, segment boundaries, segment TDOAs,
             and estimated number of speakers.
