@@ -268,9 +268,9 @@ def spatio_spectral_diarization(json_path, dsets, setup, channels, experiment_di
         est_diarization_mm = est_diarization_mm.gather()
         est_diarization_wo_mm = est_diarization_wo_mm.gather()
         if dlp_mpi.IS_MASTER:
-            dump_rttm(spatial, path=Path(experiment_dir) / f'diarization_estimates_spatial_{dset}.rttm')
-            dump_rttm(est_diarization_mm, path=Path(experiment_dir) / f'diarization_estimates_mm_{dset}.rttm')
-            dump_rttm(est_diarization_wo_mm, path=Path(experiment_dir) / f'diarization_estimates_wo_mm_{dset}.rttm')
+            pb.array.interval.rttm.to_rttm(spatial, Path(experiment_dir) / f'diarization_estimates_spatial_{dset}.rttm')
+            pb.array.interval.rttm.to_rttm(est_diarization_mm, Path(experiment_dir) / f'diarization_estimates_mm_{dset}.rttm')
+            pb.array.interval.rttm.to_rttm(est_diarization_wo_mm, Path(experiment_dir) / f'diarization_estimates_wo_mm_{dset}.rttm')
         dlp_mpi.barrier()
     return
 
