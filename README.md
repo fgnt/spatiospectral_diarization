@@ -15,11 +15,10 @@ Joerg Schmalenstroer, Reinhold Haeb-Umbach, 2023 Asilomar Conference" [[link]](h
 
 
 > **_NOTE:_**
-This repository is currently still work in progress. While all essential building blocks are incorporated, 
-the repository will still be undergoing significant and fundamental changes over the next few weeks.
-In addition, code for database preparation and evaluation to reproduce the results is still undergoing final 
-revisions and is missing in the current stage.
-Use at your own risk.
+This repository is still undergoing changes. While the diarization pipeline is in a functional state and can be applied 
+to arbitrary multi-channel recordings, the documentation is still incomplete and the code is undergoing revision for sake
+of clarity and usability.
+Therefore, the repository will still be undergoing some changes over the next few weeks.
 
 # Content
 - A multi-channel, spatio-spectral diarization pipeline
@@ -72,14 +71,12 @@ The pipeline outputs a dictionary containing the following entries:
 - _tdoa_vectors_: a list containing the corresponding average time differences of arrival (TDOAs) for each segment
 - _embeddings_: The speaker embeddings for each segment 
 
+For more details, on how to appply and the modify the pipeline, please refer to the **example notebook** in this repository.
 
 # Reproducing the LibriWASN & LibriCSS results
-> **_NOTE:_** Currently, only the evaluation scripts are available, the database preparation scripts, and call instructions
-> are still under development.
+> **_NOTE:_** Still Unndergoing final code revision. Data preparation scripts are available, call instruction on how to 
+reproduce the results from the paper will be added in the next update.
 
-## LibriCSS & LibriWASN
-
-### Semi-static meeting scenario
 
 
 # Citation
