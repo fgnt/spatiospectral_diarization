@@ -1,5 +1,5 @@
 from copy import deepcopy
-from spatiospectral_diarization.sro_compensation.sync import compensate_for_sros
+from spatiospectral_diarization.sro_compensation.sync import compensate_for_sros, estimate_sros
 import dataclasses
 import numpy as np
 import paderbox as pb
@@ -105,7 +105,7 @@ def setup_logger(log_dir=None, log_level=logging.INFO):
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
-    # File Handler (optional, für Slurm-Logs)
+    # File Handler (optional, for Slurm-Logs)
     if log_dir:
         log_dir = Path(log_dir)
         log_dir.mkdir(parents=True, exist_ok=True)
@@ -145,19 +145,9 @@ def solve_permutation(activities, ref_activities):
     for i, act in enumerate(activities):
         for j, ref_act in enumerate(ref_activities):
             overlaps[i, j] = np.sum(act == ref_act)
-    '''costs = []
-    for permutation in permutations(np.arange(len(ref_activities))):
-        cost = 0
-        for j, i in enumerate(permutation):
-            cost += overlaps[i, j]
-            j += 1
-        costs.append(cost)
-    costs = np.asarray(costs)'''
+
     _, best_permutation = scipy.optimize.linear_sum_assignment(overlaps.T, maximize=True)
-    '''all_permuations = \
-        [permutation
-         for permutation in permutations(np.arange(len(activities)))]
-    best_permutation = all_permuations[np.argmax(costs)]'''
+
     return np.asarray(best_permutation)
 
 
@@ -221,8 +211,8 @@ def load_signals(session: dict, channels: np.ndarray, setup: str, subset: str, l
 
 def merge_overlapping_segments(temp_diary, recording_length, avg_len_gcc, min_cl_segment, distributed, max_diff_tmp_cl):
     """
-    Merges overlapping segments from the same direction. For each segment, the corresponding activity interval and the
-    median TDOA (Time Difference of Arrival).
+    Merges overlapping segments if their corresponding median TDOA vectors lie close to each other,
+    indicating the same direction.
     Args:
         temp_diary (list): List of segment entries, each containing TDOA values and frame indices.
         sig_len (int): Length of the signal in samples.
@@ -355,16 +345,6 @@ def assign_estimated_activities(labels, activities_red, embeddings_red, recordin
             closest_spk = labels[np.argmin(dists)]
             est_activities[closest_spk, on:off] = 1
     return est_activities
-
-def dump_rttm(est_diarization, path):
-    """
-    Saves the given diarization in RTTM format to the specified path.
-    Args:
-        est_diarization: Diarization result in the appropriate format.
-        path: Target path for the RTTM file.
-    """
-    pb.array.interval.rttm.to_rttm(est_diarization, path)
-    return
 
 def extract_embeddings(embeddings, seg_boundaries, sig_segs, seg_onsets, embed_extractor, onset, frame_shift):
     """
