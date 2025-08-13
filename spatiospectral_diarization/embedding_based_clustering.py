@@ -15,8 +15,9 @@ def embeddings_hdbscan_clustering(embeddings, seg_boundaries):
         seg_boundaries (list of tuple): List of (onset, offset) tuples for each segment.
 
     Returns:
-        np.ndarray: Cluster labels assigned by HDBSCAN for the filtered embeddings.
-        np.ndarray: The activities of the filtered embeddings used in HDBSCAN.
+        labels: np.ndarray: Cluster labels assigned by HDBSCAN for the filtered embeddings.
+        activities_red: np.ndarray: The segment_boundaries of all remaining segments after HDBSCAN.
+        embeddings_red: np.ndarray: The embeddings of all remaining segments after HDBSCAN.
     """
     embeddings_red = []
     activities_red = []
