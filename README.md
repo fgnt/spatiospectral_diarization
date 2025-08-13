@@ -71,7 +71,7 @@ The pipeline outputs a dictionary containing the following entries:
 - _tdoa_vectors_: a list containing the corresponding average time differences of arrival (TDOAs) for each segment
 - _embeddings_: The speaker embeddings for each segment 
 
-For more details, on how to appply and the modify the pipeline, please refer to the **example notebook** in this repository.
+For more details, on how to apply and modify the pipeline, please refer to the **example notebook** in this repository.
 
 # Reproducing the LibriWASN & LibriCSS results
 > **_NOTE:_** Still Unndergoing final code revision. Data preparation scripts are available, call instruction on how to 
